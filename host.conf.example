@@ -21,7 +21,7 @@ BBL_DJANGO_BRANCH=master
 # build/ to git, push as tag e.g. prod-2026-05-03, then set BBL_FRONTEND_REF
 # below to that tag. Avoids rsync; avoids re-building on the new host.
 BBL_FRONTEND_REPO=git@github.com:bblv2/bblfrontend.git
-BBL_FRONTEND_REF=prod-LATEST
+BBL_FRONTEND_REF=prod-2026-05-03
 
 # ── Django runtime secrets ──────────────────────────────────────────
 # These get baked into the rendered Django settings file at provision time.
