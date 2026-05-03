@@ -1,0 +1,87 @@
+# bbl-build-ch nginx site config (HTTP only — TLS terminates at lb-atl).
+# If this host needs to be customer-facing directly, step 06-cert.sh adds
+# a parallel server :443 block and the cert paths.
+
+upstream static_backend {
+  server localhost:89;
+}
+
+server {
+  listen 89;
+  server_name _;
+  root /projects/bbl/bbl;
+  error_log /var/log/nginx/b_static_upstream-error.log error;
+}
+
+server {
+  listen 80;
+  root /projects/bbl;
+  index index.html;
+  # __BBL_HOSTNAME__ is the canonical name; add aliases via __BBL_DOMAIN_ALIASES__
+  server_name __BBL_HOSTNAME__ __BBL_DOMAIN_ALIASES__;
+
+  location /nginx_status { stub_status on; }
+  client_header_timeout 10m;
+  client_body_timeout   10m;
+  client_max_body_size  200M;
+  send_timeout          10m;
+  proxy_read_timeout    5m;
+  fastcgi_read_timeout  5m;
+  client_header_buffer_size   1k;
+  large_client_header_buffers 4 32k;
+  output_buffers   1 32k;
+  postpone_output  1460;
+  keepalive_timeout 620;
+  types_hash_max_size 2048;
+
+  error_page 405 =200 $uri;
+  location @405 {
+    root ...;
+    proxy_method GET;
+    proxy_pass http://static_backend;
+  }
+
+  location ~ /\. { deny all; }
+
+  # bbl-esl WebSocket (proxied to ch-atl-node, node-cc service)
+  location /wss {
+    error_log /var/log/wss-error.log error;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_http_version 1.1;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header Host $host;
+    proxy_pass http://ch-atl-node.bblapp.io:3002/wss;
+  }
+
+  # bbl-esl call-control HTTP API
+  location /call-control {
+    error_log /var/log/css-error.log error;
+    proxy_pass http://ch-atl-node.bblapp.io:3001;
+  }
+
+  # Django apps
+  location ~ ^/(bridges|bbl|accounts|bbladmin|reporting|switchboard|campaigns|notifications|smsboard|greetings)/ {
+    if ($request_method = OPTIONS) {
+      add_header "Access-Control-Allow-Origin"  *;
+      add_header "Access-Control-Allow-Methods" "GET, POST, OPTIONS, HEAD";
+      add_header "Access-Control-Allow-Headers" "Authorization, Origin, X-Requested-With, Content-Type, Accept";
+      return 200;
+    }
+    proxy_pass http://127.0.0.1:8001;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    error_log /var/log/nginx/py-error.log error;
+  }
+
+  # Django staticfiles (admin assets, DRF browsable API)
+  location /staticfiles/ {
+    root /projects/bbl;  # /projects/bbl is symlink to /projects/bbl-django
+  }
+
+  # bblfrontend SPA (built artifacts in /opt/bblfrontend/build/)
+  location /static/app { return 301 /app/$is_args$args; }
+  location /app    { alias /opt/bblfrontend/build/; }
+  location /assets { alias /opt/bblfrontend/build/assets/; }
+}

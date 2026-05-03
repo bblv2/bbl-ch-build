@@ -1,58 +1,105 @@
 #!/bin/bash
-# 07-finalize.sh — version stamp, motd, sanity checks, leave the box clean.
+# 10-finalize.sh — write build manifest, render motd, surface "ready" message.
 set -euo pipefail
 
-# shellcheck disable=SC1091
-. "$BBL_HOST_CONF"
-: "${BBL_REC_PATH:=/opt/fs-qc-recordings}"
+source "${BBL_HOST_CONF:-/etc/bbl-build-ch-host.conf}"
 
-echo "==> Writing /etc/bbl-fs-build (version stamp)"
-FS_VERSION="$(dpkg-query -W -f='${Version}\n' freeswitch 2>/dev/null || echo unknown)"
-CONFIG_COMMIT="$(git -C /usr/src/bbl-fs-config rev-parse --short HEAD 2>/dev/null || echo unknown)"
-BUILD_COMMIT="$(git -C "$BBL_BUILD_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
-BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+BUILD_DIR="${BBL_BUILD_DIR:-/usr/src/bbl-build-ch}"
+DJANGO_DIR=/projects/bbl-django
+FRONTEND_DIR=/opt/bblfrontend
 
-cat > /etc/bbl-fs-build <<EOF
-hostname=${BBL_HOSTNAME}
-role=${BBL_ROLE}
-size=${BBL_SIZE}
-built_at=${BUILT_AT}
-fs_version=${FS_VERSION}
-debian_version=$(cat /etc/debian_version)
+# ── Build manifest ──────────────────────────────────────────────────
+build_commit=$(cd "$BUILD_DIR" && git rev-parse HEAD 2>/dev/null || echo "unknown")
+django_commit=$(cd "$DJANGO_DIR" && git rev-parse HEAD 2>/dev/null || echo "unknown")
+django_branch=$(cd "$DJANGO_DIR" && git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+frontend_commit=$(cd "$FRONTEND_DIR" && git rev-parse HEAD 2>/dev/null || echo "unknown")
+frontend_ref=$(cd "$FRONTEND_DIR" && git describe --tags --always 2>/dev/null || echo "unknown")
+django_version=$(/projects/bbl_env_py3/bin/python -c 'import django; print(django.__version__)' 2>/dev/null || echo "?")
+python_version=$(/projects/bbl_env_py3/bin/python --version 2>&1 | awk '{print $2}')
 kernel=$(uname -r)
-build_repo_commit=${BUILD_COMMIT}
-config_repo_commit=${CONFIG_COMMIT}
-external_ip=${BBL_EXTERNAL_IP}
-recording_path=${BBL_REC_PATH}
-EOF
-chmod 644 /etc/bbl-fs-build
+celery_running=$(supervisorctl status celery 2>&1 | head -1)
+gunicorn_running=$(supervisorctl status bbl 2>&1 | head -1)
 
-echo "==> Writing /etc/motd"
-sed -e "s|__BBL_HOSTNAME__|${BBL_HOSTNAME}|g" \
-    -e "s|__BBL_ROLE__|${BBL_ROLE}|g" \
-    -e "s|__BBL_SIZE__|${BBL_SIZE}|g" \
-    -e "s|__BBL_BUILT_AT__|${BUILT_AT}|g" \
-    -e "s|__BBL_FS_VERSION__|${FS_VERSION:0:30}|g" \
-    -e "s|__BBL_CONFIG_COMMIT__|${CONFIG_COMMIT}|g" \
-    -e "s|__BBL_REC_PATH__|${BBL_REC_PATH}|g" \
-    "$BBL_BUILD_DIR/templates/motd" > /etc/motd
+cat > /etc/bbl-build-ch <<MANIFEST
+# bbl-build-ch — build manifest
+# Auto-generated $(date -u +%Y-%m-%dT%H:%M:%SZ) by /usr/src/bbl-build-ch/steps/10-finalize.sh
 
-# Wipe the dynamic motd debian sometimes adds — ours is the source of truth
-rm -f /etc/update-motd.d/[0-9]*-* 2>/dev/null || true
+hostname:           $BBL_HOSTNAME
+role:               ${BBL_ROLE:-?}
+size:               ${BBL_SIZE:-?}
 
-echo "==> Final sanity checks"
-echo "--- FreeSWITCH status ---"
-fs_cli -x 'status' | head -8
-echo
-echo "--- listening sockets ---"
-ss -tlnp 2>/dev/null | grep -E '5060|5061|5080|5081|7443|22' || true
-echo
-echo "--- ufw status ---"
-ufw status | head -15
-echo
-echo "--- bbl-fs-build version stamp ---"
-cat /etc/bbl-fs-build
+bbl-build-ch:       $build_commit  ($BUILD_DIR)
+bbl-django:         $django_commit
+  branch:           $django_branch
+bblfrontend:        $frontend_commit
+  ref:              $frontend_ref
 
+django version:     $django_version
+python:             $python_version
+kernel:             $kernel
+
+supervisor status:
+  $gunicorn_running
+  $celery_running
+
+beat enabled:       ${BBL_RUN_BEAT:-false}
+db host:            ${BBL_DB_HOST:-?}
+db name:            ${BBL_DB_NAME:-?}
+
+built at:           $(date -u +%Y-%m-%dT%H:%M:%SZ)
+MANIFEST
+
+cat /etc/bbl-build-ch
 echo
-echo "==> 07-finalize.sh complete"
-echo "==> Box is ready: $BBL_HOSTNAME ($BBL_ROLE / $BBL_SIZE)"
+
+# ── motd ────────────────────────────────────────────────────────────
+cat > /etc/motd <<MOTD
+
+╔═══════════════════════════════════════════════════════════════════╗
+║  $BBL_HOSTNAME — BBL Django call-handler box                      
+║                                                                   
+║  Provisioned with bbl-build-ch (build commit $build_commit)
+║  Django $django_version on Python $python_version
+║  bbl-django @ $django_branch ($(echo $django_commit | cut -c1-8))
+║                                                                   
+║  Status:           supervisorctl status                           
+║  Restart Django:   sudo supervisorctl restart bbl                 
+║  Restart Celery:   sudo supervisorctl restart celery              
+║  Log:              tail -f /var/log/supervisor/{bbl,celery}.stderr.log
+║  Build manifest:   cat /etc/bbl-build-ch                          
+╚═══════════════════════════════════════════════════════════════════╝
+
+MOTD
+
+# ── Final smoke + ready message ────────────────────────────────────
+echo
+echo "════════════════════════════════════════════════════════════════"
+echo "==> FINAL CHECKS"
+echo "════════════════════════════════════════════════════════════════"
+echo
+
+GUNICORN_HEALTH=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8001/bbladmin/login/ 2>&1 || echo "ERR")
+THEME_JS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8001/staticfiles/admin/js/theme.js 2>&1 || echo "ERR")
+NGINX_HEALTH=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1/nginx_status 2>&1 || echo "ERR")
+SPA_INDEX=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1/app/ 2>&1 || echo "ERR")
+
+echo "gunicorn /bbladmin/login/         $GUNICORN_HEALTH  (expect 200)"
+echo "gunicorn /staticfiles/admin/js/theme.js   $THEME_JS  (expect 200)"
+echo "nginx /nginx_status               $NGINX_HEALTH  (expect 200)"
+echo "nginx /app/  (frontend SPA)       $SPA_INDEX  (expect 200)"
+echo
+
+if [[ "$GUNICORN_HEALTH" == "200" && "$NGINX_HEALTH" == "200" && "$SPA_INDEX" == "200" ]]; then
+    echo "════════════════════════════════════════════════════════════════"
+    echo "==> ✓ READY: $BBL_HOSTNAME is serving cleanly."
+    echo "    Next: add to lb-atl nginx upstream at weight=0, then ramp."
+    echo "    Public IP: $(curl -s -4 ifconfig.me || echo '?')"
+    echo "════════════════════════════════════════════════════════════════"
+else
+    echo "════════════════════════════════════════════════════════════════"
+    echo "==> ⚠️  NOT READY — one or more smoke checks failed."
+    echo "    Check supervisor: supervisorctl status"
+    echo "    Check logs: /var/log/supervisor/bbl.stderr.log"
+    echo "════════════════════════════════════════════════════════════════"
+    exit 1
+fi

@@ -1,0 +1,18 @@
+[program:celery]
+numprocs=1
+directory=/projects/bbl-django
+process_name=runner%(process_num)s
+user=bbl
+# -B = embedded beat (run scheduled tasks). MUST be set on EXACTLY ONE host
+# in the ch-atl* pool. During the ch-atl1 → ch-atl3 ramp, the new ch-atl3
+# starts WITHOUT -B (BBL_RUN_BEAT=false in host.conf), and the operator
+# flips it on AFTER ch-atl1 is decommissioned. Otherwise scheduled tasks
+# double-fire (billing checks, cleanups) and customers get duplicate
+# emails / charges.
+command=/projects/bbl_env_py3/bin/celery -A bbl worker -l INFO __BBL_CELERY_BEAT_FLAG__ -c 5
+autostart=true
+autorestart=true
+stdout_logfile = /var/log/supervisor/celery.stdout.log
+stderr_logfile = /var/log/supervisor/celery.stderr.log
+stdout_logfile_maxbytes = 80MB
+stderr_logfile_maxbytes = 80MB

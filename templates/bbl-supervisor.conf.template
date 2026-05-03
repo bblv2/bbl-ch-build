@@ -1,0 +1,10 @@
+[program:bbl]
+directory=/projects/bbl-django
+user=bbl
+command=/projects/bbl_env_py3/bin/gunicorn --preload -b __BBL_GUNICORN_BIND__ --workers=__BBL_GUNICORN_WORKERS__ --timeout 80 bbl.wsgi --pythonpath '/projects/bbl-django' -c bbl/workers_config.py --logger-class bbl.custom_glogging.Logger
+autostart=true
+autorestart=true
+stdout_logfile = /var/log/supervisor/bbl.stdout.log
+stderr_logfile = /var/log/supervisor/bbl.stderr.log
+stdout_logfile_maxbytes = 100MB
+stderr_logfile_maxbytes = 100MB

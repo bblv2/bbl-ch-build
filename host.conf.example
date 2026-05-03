@@ -6,11 +6,15 @@
 # The provision script auto-derives /etc/bbl-build-ch-<short>.host.conf
 # from this shared file and adds BBL_DOMAIN at the time of provision.
 
-# ── Django code source ──────────────────────────────────────────────
+# ── Django code source ──
+# BBL_DJANGO_BRANCH=release tracks the moveable ref pushed to bbl-django
+# origin pointing at the currently-tested-on-beta tip. Operator advances
+# this ref to roll out new code; ch-atl* boxes pick it up via re-running
+# step 03-django-clone.sh OR via cron-tracked auto-update if configured.────────────────────────────────────────────
 # bbl-django repo + branch to deploy. Default to the merged django-upgrade
 # tip on master once chb-atl's branch is merged.
 BBL_DJANGO_REPO=git@github.com:bblv2/bbl-django.git
-BBL_DJANGO_BRANCH=master
+BBL_DJANGO_BRANCH=release
 
 # ── Frontend SPA source ─────────────────────────────────────────────
 # bblfrontend repo + git ref to check out. The ref should point at a
@@ -52,3 +56,23 @@ BBL_CERT_EMAIL=
 # show up on https://monitor.rpt.bblapp.io/servers automatically).
 # Same token bbl-fs-build uses.
 BBL_MONITOR_TOKEN=
+
+# ── Per-host runtime tuning (optional; defaults shown) ─────────────
+# Gunicorn bind address. lb-atl proxies to this. Default 127.0.0.1:8001
+# matches chb-atl convention; use 0.0.0.0:8001 if lb-atl is on a different
+# subnet (legacy ch-atl1 used 0.0.0.0).
+# BBL_GUNICORN_BIND=127.0.0.1:8001
+
+# Number of gunicorn workers. chb-atl runs 9; ch-atl1 runs 10.
+# BBL_GUNICORN_WORKERS=9
+
+# Whether THIS host runs celery beat (-B). Defaults FALSE because most
+# new boxes are added to a pool where another box already runs beat —
+# enabling beat on two boxes double-fires scheduled tasks (billing
+# cleanups, customer emails, churn reports). Operator flips to true
+# AFTER decommissioning the old box.
+# BBL_RUN_BEAT=false
+
+# Extra DNS aliases nginx should accept (space-separated). Always-on:
+# BBL_HOSTNAME (auto-set during provision).
+# BBL_DOMAIN_ALIASES=app.brandedbridgeline.com beta.bblapp.io
