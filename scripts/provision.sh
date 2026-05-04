@@ -129,9 +129,22 @@ TMPDIR="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR"' EXIT
 
 # Construct cloud-init user_data combining:
-#   - /etc/bbl-ch-host.conf  (operator-supplied host knobs + secrets)
-#   - /etc/bbl-ch-bootstrap.env (build args for bootstrap.sh)
-#   - bootstrap.sh runs as the cloud-init script
+#   - /etc/bbl-ch-host.conf       (operator-supplied host knobs + secrets)
+#   - /etc/bbl-ch-bootstrap.env   (build args for bootstrap.sh)
+#   - /root/.ssh/id_rsa           (operator's github SSH key — needed by step 03 + 04
+#                                  to clone PRIVATE bbl-django + bblfrontend repos)
+#   - /root/.ssh/known_hosts      (github.com entries so SSH doesn't prompt)
+#   - bootstrap.sh runs as the cloud-init script (curls from PUBLIC bbl-ch-build)
+#
+# Security note: the github SSH key is the operator's `st_github` (which has
+# push access to all bblv2 repos). It's exposed to anyone with API access to
+# this Linode account. Acceptable for short-lived test boxes; replace with a
+# per-box deploy key for long-lived prod boxes.
+SSH_KEY_FILE="${BBL_OPERATOR_GITHUB_KEY:-/root/.ssh/st_github}"
+[[ -r "$SSH_KEY_FILE" ]] || { echo "$0: cannot read SSH key at $SSH_KEY_FILE" >&2; exit 2; }
+SSH_KEY_B64=$(base64 -w 0 < "$SSH_KEY_FILE")
+GITHUB_HOSTKEYS_B64=$(ssh-keyscan -t rsa,ed25519,ecdsa github.com 2>/dev/null | base64 -w 0)
+
 cat > "$TMPDIR/user_data.yaml" <<EOF
 #cloud-config
 write_files:
@@ -146,8 +159,18 @@ $(sed 's/^/      /' "$HOST_CONF")
       BBL_ROLE=${ARGS[role]}
       BBL_SIZE=${ARGS[size]}
       BBL_HOSTNAME=${ARGS[hostname]}
+  - path: /root/.ssh/id_rsa
+    permissions: '0600'
+    owner: root:root
+    encoding: base64
+    content: ${SSH_KEY_B64}
+  - path: /root/.ssh/known_hosts
+    permissions: '0644'
+    owner: root:root
+    encoding: base64
+    content: ${GITHUB_HOSTKEYS_B64}
 runcmd:
-  - bash -c 'curl -fsSL https://raw.githubusercontent.com/bblv2/bbl-ch-build/main/bootstrap.sh | bash >>/var/log/bbl-ch-build.log 2>&1'
+  - bash -c 'curl -fsSL https://raw.githubusercontent.com/bblv2/bbl-ch-build/master/bootstrap.sh | bash >>/var/log/bbl-ch-build.log 2>&1'
 EOF
 
 # ── Create the Linode ────────────────────────────────────────────────
