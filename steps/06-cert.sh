@@ -8,6 +8,15 @@ set -euo pipefail
 
 # shellcheck disable=SC1091
 . "$BBL_HOST_CONF"
+
+# Django call-handler boxes only need their own cert if customer-facing
+# direct. In the standard ch-atl3 setup lb-atl terminates TLS and proxies
+# over HTTP — set BBL_SKIP_CERT=true in host.conf to skip this step.
+if [[ "${BBL_SKIP_CERT:-false}" == "true" ]]; then
+    echo "==> Skipping cert (BBL_SKIP_CERT=true)"
+    exit 0
+fi
+
 CRT_DOMAIN="$BBL_DOMAIN"
 CRT_EMAIL="${BBL_CERT_EMAIL:-admin@$BBL_DOMAIN}"
 
