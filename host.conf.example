@@ -1,9 +1,9 @@
-# bbl-build-ch host.conf — shared secrets template.
+# bbl-ch-build host.conf — shared secrets template.
 #
-# Operator copies this to /etc/bbl-build-ch.host.conf (mode 600) and fills
+# Operator copies this to /etc/bbl-ch.host.conf (mode 600) and fills
 # in real values. NEVER commit a populated copy.
 #
-# The provision script auto-derives /etc/bbl-build-ch-<short>.host.conf
+# The provision script auto-derives /etc/bbl-ch-<short>.host.conf
 # from this shared file and adds BBL_DOMAIN at the time of provision.
 
 # ── Django code source ──

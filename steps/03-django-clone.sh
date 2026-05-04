@@ -3,7 +3,7 @@
 # Idempotent: re-running pulls latest of BBL_DJANGO_BRANCH and re-installs.
 set -euo pipefail
 
-source "${BBL_HOST_CONF:-/etc/bbl-build-ch-host.conf}"
+source "${BBL_HOST_CONF:-/etc/bbl-ch-host.conf}"
 
 : "${BBL_DJANGO_REPO:?BBL_DJANGO_REPO not set in host.conf}"
 : "${BBL_DJANGO_BRANCH:?BBL_DJANGO_BRANCH not set in host.conf}"

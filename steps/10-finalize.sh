@@ -2,9 +2,9 @@
 # 10-finalize.sh — write build manifest, render motd, surface "ready" message.
 set -euo pipefail
 
-source "${BBL_HOST_CONF:-/etc/bbl-build-ch-host.conf}"
+source "${BBL_HOST_CONF:-/etc/bbl-ch-host.conf}"
 
-BUILD_DIR="${BBL_BUILD_DIR:-/usr/src/bbl-build-ch}"
+BUILD_DIR="${BBL_BUILD_DIR:-/usr/src/bbl-ch-build}"
 DJANGO_DIR=/projects/bbl-django
 FRONTEND_DIR=/opt/bblfrontend
 
@@ -20,15 +20,15 @@ kernel=$(uname -r)
 celery_running=$(supervisorctl status celery 2>&1 | head -1)
 gunicorn_running=$(supervisorctl status bbl 2>&1 | head -1)
 
-cat > /etc/bbl-build-ch <<MANIFEST
-# bbl-build-ch — build manifest
-# Auto-generated $(date -u +%Y-%m-%dT%H:%M:%SZ) by /usr/src/bbl-build-ch/steps/10-finalize.sh
+cat > /etc/bbl-ch-build <<MANIFEST
+# bbl-ch-build — build manifest
+# Auto-generated $(date -u +%Y-%m-%dT%H:%M:%SZ) by /usr/src/bbl-ch-build/steps/10-finalize.sh
 
 hostname:           $BBL_HOSTNAME
 role:               ${BBL_ROLE:-?}
 size:               ${BBL_SIZE:-?}
 
-bbl-build-ch:       $build_commit  ($BUILD_DIR)
+bbl-ch-build:       $build_commit  ($BUILD_DIR)
 bbl-django:         $django_commit
   branch:           $django_branch
 bblfrontend:        $frontend_commit
@@ -49,7 +49,7 @@ db name:            ${BBL_DB_NAME:-?}
 built at:           $(date -u +%Y-%m-%dT%H:%M:%SZ)
 MANIFEST
 
-cat /etc/bbl-build-ch
+cat /etc/bbl-ch-build
 echo
 
 # ── motd ────────────────────────────────────────────────────────────
@@ -58,7 +58,7 @@ cat > /etc/motd <<MOTD
 ╔═══════════════════════════════════════════════════════════════════╗
 ║  $BBL_HOSTNAME — BBL Django call-handler box                      
 ║                                                                   
-║  Provisioned with bbl-build-ch (build commit $build_commit)
+║  Provisioned with bbl-ch-build (build commit $build_commit)
 ║  Django $django_version on Python $python_version
 ║  bbl-django @ $django_branch ($(echo $django_commit | cut -c1-8))
 ║                                                                   
@@ -66,7 +66,7 @@ cat > /etc/motd <<MOTD
 ║  Restart Django:   sudo supervisorctl restart bbl                 
 ║  Restart Celery:   sudo supervisorctl restart celery              
 ║  Log:              tail -f /var/log/supervisor/{bbl,celery}.stderr.log
-║  Build manifest:   cat /etc/bbl-build-ch                          
+║  Build manifest:   cat /etc/bbl-ch-build                          
 ╚═══════════════════════════════════════════════════════════════════╝
 
 MOTD

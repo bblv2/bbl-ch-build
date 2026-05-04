@@ -1,4 +1,4 @@
-# bbl-build-ch
+# bbl-ch-build
 
 Provisioning script for BBL Django call-handler boxes on Linode. The role currently filled by `ch-atl1.bblapp.io` (and historically `ch-atl2`). NOT for FreeSWITCH boxes — for those use [`bbl-fs-build`](https://github.com/bblv2/bbl-fs-build).
 
@@ -8,7 +8,7 @@ Sibling repo: `bbl-fs-build`. Same shape (cloud-init bootstrap + numbered idempo
 
 - **Cheap and disposable.** Spin up a new ch box in ~5–10 minutes; tear it down in 30 seconds. No bespoke per-host snowflakes.
 - **Portable.** Plain shell + cloud-init `user_data`. Same script could provision on AWS, Hetzner, or bare metal with minor adjustments.
-- **Auditable.** Every box writes `/etc/bbl-build-ch` recording exactly what it was built from (build commit, django commit, frontend commit, kernel, build time).
+- **Auditable.** Every box writes `/etc/bbl-ch-build` recording exactly what it was built from (build commit, django commit, frontend commit, kernel, build time).
 - **Self-securing.** `ufw` opens only 22/80/443. fail2ban watches sshd. acme.sh issues + auto-renews TLS for the Django domain. Monitor agent auto-registers on https://monitor.rpt.bblapp.io/servers.
 
 ## What's on a ch box
@@ -38,8 +38,8 @@ Pick to match expected load. ch-atl1 today is roughly large-equivalent.
 # 1. Prerequisites (one-time on operator's machine — same as bbl-fs-build)
 brew install linode-cli jq                # macOS
 linode-cli configure                       # paste API token
-sudo cp host.conf.example /etc/bbl-build-ch.host.conf
-sudo $EDITOR /etc/bbl-build-ch.host.conf  # fill in shared secrets
+sudo cp host.conf.example /etc/bbl-ch.host.conf
+sudo $EDITOR /etc/bbl-ch.host.conf  # fill in shared secrets
 
 # 2. Provision
 ./scripts/provision.sh \
@@ -48,7 +48,7 @@ sudo $EDITOR /etc/bbl-build-ch.host.conf  # fill in shared secrets
     hostname=ch-atl3.bblapp.io
 
 # 3. Wait 5–10 min (Django + frontend cloning + pip install take longer than FS apt-install)
-ssh root@<linode-ip> tail -f /var/log/bbl-build-ch.log
+ssh root@<linode-ip> tail -f /var/log/bbl-ch-build.log
 ```
 
 The provision script will print the new Linode's public IPv4 (you'll need this for DNS + the lb-atl nginx upstream entry).
@@ -81,17 +81,17 @@ The provision script will print the new Linode's public IPv4 (you'll need this f
                        feedback memory feedback_bbl_prod_schema_drift.md and
                        starry-marinating-sunrise plan section 0e-fix);
                        supervisorctl start bbl celery; smoke test
-10-finalize.sh         Write /etc/bbl-build-ch (build manifest), render motd,
+10-finalize.sh         Write /etc/bbl-ch-build (build manifest), render motd,
                        sanity checks, surface "ready to add to nginx upstream"
                        message
 ```
 
-Each step is small and idempotent — safe to re-run after a failure. Logs go to `/var/log/bbl-build-ch.log` via `tee` from `bootstrap.sh`.
+Each step is small and idempotent — safe to re-run after a failure. Logs go to `/var/log/bbl-ch-build.log` via `tee` from `bootstrap.sh`.
 
 ## Security
 
 - `host.conf` is **never committed**. `.gitignore` blocks it. `host.conf.example` shows what fields exist with empty values.
-- Django SECRET_KEY, DB password, Redis URL, Stripe keys, Mailgun key, Telnyx user/token live in `/etc/bbl-build-ch-host.conf` (mode 600). Nowhere else on disk except inside the rendered Django settings file (also mode 600).
+- Django SECRET_KEY, DB password, Redis URL, Stripe keys, Mailgun key, Telnyx user/token live in `/etc/bbl-ch-host.conf` (mode 600). Nowhere else on disk except inside the rendered Django settings file (also mode 600).
 - TLS cert and key in `/etc/letsencrypt/live/<domain>/`.
 
 ## Status

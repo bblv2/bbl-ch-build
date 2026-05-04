@@ -1,4 +1,4 @@
-# bbl-build-ch nginx site config (HTTP only — TLS terminates at lb-atl).
+# bbl-ch-build nginx site config (HTTP only — TLS terminates at lb-atl).
 # If this host needs to be customer-facing directly, step 06-cert.sh adds
 # a parallel server :443 block and the cert paths.
 

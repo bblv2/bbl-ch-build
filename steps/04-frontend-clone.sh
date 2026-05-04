@@ -10,10 +10,10 @@
 #   git add build/ && git commit -m "Snapshot prod build $(date +%F)"
 #   git tag prod-$(date +%F-%H%M)
 #   git push origin master --tags
-#   # Then in /etc/bbl-build-ch.host.conf set BBL_FRONTEND_REF=prod-2026-MM-DD-HHMM
+#   # Then in /etc/bbl-ch.host.conf set BBL_FRONTEND_REF=prod-2026-MM-DD-HHMM
 set -euo pipefail
 
-source "${BBL_HOST_CONF:-/etc/bbl-build-ch-host.conf}"
+source "${BBL_HOST_CONF:-/etc/bbl-ch-host.conf}"
 
 : "${BBL_FRONTEND_REPO:?BBL_FRONTEND_REPO not set in host.conf}"
 : "${BBL_FRONTEND_REF:?BBL_FRONTEND_REF not set in host.conf}"

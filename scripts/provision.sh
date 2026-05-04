@@ -1,19 +1,19 @@
 #!/bin/bash
-# provision.sh — create a new Django call-handler Linode using bbl-build-ch.
+# provision.sh — create a new Django call-handler Linode using bbl-ch-build.
 #
 # Usage:
 #   scripts/provision.sh role=beta size=medium hostname=ch-test-1.bblapp.io
 #   scripts/provision.sh role=prod size=large  hostname=ch-atl-3.bblapp.io
 #
 # host-conf= is optional. If omitted, the script reads shared secrets
-# from /etc/bbl-build-ch.host.conf, derives a per-host file at
-# /etc/bbl-build-ch-<short>.host.conf with BBL_DOMAIN auto-set from hostname=,
+# from /etc/bbl-ch.host.conf, derives a per-host file at
+# /etc/bbl-ch-<short>.host.conf with BBL_DOMAIN auto-set from hostname=,
 # and reuses the per-host file across re-provisions. Operators no longer need to copy
 # the previous host's conf file forward by hand.
 #
 # Prerequisites:
 #   - linode-cli installed and authenticated (`linode-cli configure`)
-#   - /etc/bbl-build-ch.host.conf populated once with BBL_DJANGO_REPO, BBL_FRONTEND_REF,
+#   - /etc/bbl-ch.host.conf populated once with BBL_DJANGO_REPO, BBL_FRONTEND_REF,
 #     BBL_DB_PASSWORD, BBL_DJANGO_SECRET_KEY, etc. (see host.conf.example for the field list).
 set -euo pipefail
 
@@ -59,7 +59,7 @@ echo "==> Provisioning ${ARGS[hostname]} as Linode $SKU in ${ARGS[region]}"
 
 # ── DNS: find the Linode-managed zone for this hostname ─────────────
 # Resolve BEFORE writing any per-host conf, so a typo'd hostname can't
-# leave an orphan /etc/bbl-build-ch-<bad>.host.conf behind.
+# leave an orphan /etc/bbl-ch-<bad>.host.conf behind.
 ROOT_DOMAIN=
 ZONE_ID=
 while read -r line; do
@@ -84,12 +84,12 @@ echo "    DNS zone:    $ROOT_DOMAIN (ID $ZONE_ID), subdomain '$SUBDOMAIN'"
 
 # ── Resolve host.conf ────────────────────────────────────────────────
 # host-conf= is an escape hatch. Default flow: per-host file lives at
-# /etc/bbl-build-ch-<short>.host.conf and is auto-derived from the shared
-# secrets file at /etc/bbl-build-ch.host.conf on first provision. Re-provisions
+# /etc/bbl-ch-<short>.host.conf and is auto-derived from the shared
+# secrets file at /etc/bbl-ch.host.conf on first provision. Re-provisions
 # reuse the existing per-host file across re-provisions.
 SHORT_HOST="${ARGS[hostname]%%.*}"
-PER_HOST_CONF="/etc/bbl-build-ch-${SHORT_HOST}.host.conf"
-SHARED_CONF="${BBL_CH_SHARED_CONF:-/etc/bbl-build-ch.host.conf}"
+PER_HOST_CONF="/etc/bbl-ch-${SHORT_HOST}.host.conf"
+SHARED_CONF="${BBL_CH_SHARED_CONF:-/etc/bbl-ch.host.conf}"
 
 if [[ -n "${ARGS[host-conf]}" ]]; then
     HOST_CONF="${ARGS[host-conf]}"
@@ -129,25 +129,25 @@ TMPDIR="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR"' EXIT
 
 # Construct cloud-init user_data combining:
-#   - /etc/bbl-build-ch-host.conf  (operator-supplied host knobs + secrets)
-#   - /etc/bbl-build-ch-bootstrap.env (build args for bootstrap.sh)
+#   - /etc/bbl-ch-host.conf  (operator-supplied host knobs + secrets)
+#   - /etc/bbl-ch-bootstrap.env (build args for bootstrap.sh)
 #   - bootstrap.sh runs as the cloud-init script
 cat > "$TMPDIR/user_data.yaml" <<EOF
 #cloud-config
 write_files:
-  - path: /etc/bbl-build-ch-host.conf
+  - path: /etc/bbl-ch-host.conf
     permissions: '0600'
     owner: root:root
     content: |
 $(sed 's/^/      /' "$HOST_CONF")
-  - path: /etc/bbl-build-ch-bootstrap.env
+  - path: /etc/bbl-ch-bootstrap.env
     permissions: '0644'
     content: |
       BBL_ROLE=${ARGS[role]}
       BBL_SIZE=${ARGS[size]}
       BBL_HOSTNAME=${ARGS[hostname]}
 runcmd:
-  - bash -c 'curl -fsSL https://raw.githubusercontent.com/bblv2/bbl-build-ch/main/bootstrap.sh | bash >>/var/log/bbl-build-ch.log 2>&1'
+  - bash -c 'curl -fsSL https://raw.githubusercontent.com/bblv2/bbl-ch-build/main/bootstrap.sh | bash >>/var/log/bbl-ch-build.log 2>&1'
 EOF
 
 # ── Create the Linode ────────────────────────────────────────────────
@@ -203,21 +203,21 @@ done
     || { echo "WARN: DNS hasn't propagated after 5 min; cert step may fail. Continuing." >&2; }
 
 echo
-echo "==> Waiting for cloud-init to finish bbl-build-ch (~5 min)..."
-echo "    Tail with:  ssh root@$LINODE_IP tail -f /var/log/bbl-build-ch.log"
+echo "==> Waiting for cloud-init to finish bbl-ch-build (~5 min)..."
+echo "    Tail with:  ssh root@$LINODE_IP tail -f /var/log/bbl-ch-build.log"
 
 
-# ── Don't proceed until /etc/bbl-build-ch appears (setup.sh has finished)
+# ── Don't proceed until /etc/bbl-ch-build appears (setup.sh has finished)
 for _ in $(seq 1 60); do
     if ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new \
-        "root@$LINODE_IP" 'test -f /etc/bbl-build-ch' 2>/dev/null; then
+        "root@$LINODE_IP" 'test -f /etc/bbl-ch-build' 2>/dev/null; then
         break
     fi
     sleep 10
 done
 
 echo "==> Done. Build summary:"
-ssh -o BatchMode=yes "root@$LINODE_IP" 'cat /etc/bbl-build-ch' || true
+ssh -o BatchMode=yes "root@$LINODE_IP" 'cat /etc/bbl-ch-build' || true
 
 # ── post-build registration steps (operator-side) ──────────────────
 PY=/opt/bbl-call-tests/.venv/bin/python

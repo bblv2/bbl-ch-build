@@ -1,5 +1,5 @@
 #!/bin/bash
-# bbl-build-ch setup.sh — orchestrator for Django call-handler box provisioning.
+# bbl-ch-build setup.sh — orchestrator for Django call-handler box provisioning.
 #
 # Adapted from bbl-fs-build/setup.sh (BBL FreeSWITCH provisioning) with the
 # FS-specific bits stripped. This builds boxes that run Django + gunicorn +
@@ -7,7 +7,7 @@
 # ch-atl1 (and historically ch-atl2). NOT for FreeSWITCH boxes.
 #
 # Each step in steps/ is small, idempotent, and logs to stdout/stderr (we
-# tee to /var/log/bbl-build-ch.log via bootstrap.sh). Add a step file
+# tee to /var/log/bbl-ch-build.log via bootstrap.sh). Add a step file
 # instead of inflating this one.
 set -euo pipefail
 
@@ -35,7 +35,7 @@ export BBL_ROLE="${ARGS[role]}"
 export BBL_SIZE="${ARGS[size]}"
 export BBL_HOSTNAME="${ARGS[hostname]}"
 export BBL_BUILD_DIR="$(cd "$(dirname "$0")" && pwd)"
-export BBL_HOST_CONF=/etc/bbl-build-ch-host.conf
+export BBL_HOST_CONF=/etc/bbl-ch-host.conf
 
 # ── Environment sanity ───────────────────────────────────────────────
 if [[ "$EUID" -ne 0 ]]; then
@@ -57,7 +57,7 @@ if ! grep -q "$BBL_HOSTNAME" /etc/hosts; then
 fi
 
 # ── Run steps in order ───────────────────────────────────────────────
-echo "==> bbl-build-ch starting: role=$BBL_ROLE size=$BBL_SIZE hostname=$BBL_HOSTNAME"
+echo "==> bbl-ch-build starting: role=$BBL_ROLE size=$BBL_SIZE hostname=$BBL_HOSTNAME"
 echo "==> $(date -u)"
 
 cd "$BBL_BUILD_DIR"
@@ -71,5 +71,5 @@ done
 
 echo
 echo "════════════════════════════════════════════════════════════════"
-echo "==> bbl-build-ch complete  $(date -u)"
+echo "==> bbl-ch-build complete  $(date -u)"
 echo "════════════════════════════════════════════════════════════════"
