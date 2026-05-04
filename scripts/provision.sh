@@ -1,20 +1,20 @@
 #!/bin/bash
-# provision.sh — create a new FreeSWITCH Linode using bbl-fs-build.
+# provision.sh — create a new Django call-handler Linode using bbl-build-ch.
 #
 # Usage:
-#   scripts/provision.sh role=beta size=medium hostname=fs-test-4.bblapp.io
-#   scripts/provision.sh role=prod size=large  hostname=fs-atl-2.bblapp.io
+#   scripts/provision.sh role=beta size=medium hostname=ch-test-1.bblapp.io
+#   scripts/provision.sh role=prod size=large  hostname=ch-atl-3.bblapp.io
 #
 # host-conf= is optional. If omitted, the script reads shared secrets
-# from /etc/bbl-fs.host.conf, derives a per-host file at
-# /etc/bbl-fs-<short>.host.conf with BBL_DOMAIN auto-set from hostname=,
-# and persists register.py IDs there. Operators no longer need to copy
+# from /etc/bbl-build-ch.host.conf, derives a per-host file at
+# /etc/bbl-build-ch-<short>.host.conf with BBL_DOMAIN auto-set from hostname=,
+# and reuses the per-host file across re-provisions. Operators no longer need to copy
 # the previous host's conf file forward by hand.
 #
 # Prerequisites:
 #   - linode-cli installed and authenticated (`linode-cli configure`)
-#   - /etc/bbl-fs.host.conf populated once with BBL_B2_*, BBL_SIGNALWIRE_TOKEN,
-#     BBL_CERT_EMAIL, etc. (see host.conf.example for the field list).
+#   - /etc/bbl-build-ch.host.conf populated once with BBL_DJANGO_REPO, BBL_FRONTEND_REF,
+#     BBL_DB_PASSWORD, BBL_DJANGO_SECRET_KEY, etc. (see host.conf.example for the field list).
 set -euo pipefail
 
 # Source operator-side env (BBL_MONITOR_DSN, TELNYX_API_KEY) needed by
@@ -39,10 +39,10 @@ done
 
 # Hostname format precheck. Must be FQDN with at least one dot, and
 # the part before the first dot must be non-empty. Rejects shorthand
-# like 'fs-test-5' that would otherwise propagate as BBL_DOMAIN and
+# like 'ch-test-1' that would otherwise propagate as BBL_DOMAIN and
 # fail later at DNS / TLS time.
 if [[ "${ARGS[hostname]}" != *.*  || "${ARGS[hostname]%%.*}" == "" ]]; then
-    echo "$0: hostname='${ARGS[hostname]}' must be a fully-qualified domain (e.g. fs-test-5.bblapp.io)" >&2
+    echo "$0: hostname='${ARGS[hostname]}' must be a fully-qualified domain (e.g. ch-test-1.bblapp.io)" >&2
     exit 2
 fi
 
@@ -59,7 +59,7 @@ echo "==> Provisioning ${ARGS[hostname]} as Linode $SKU in ${ARGS[region]}"
 
 # ── DNS: find the Linode-managed zone for this hostname ─────────────
 # Resolve BEFORE writing any per-host conf, so a typo'd hostname can't
-# leave an orphan /etc/bbl-fs-<bad>.host.conf behind.
+# leave an orphan /etc/bbl-build-ch-<bad>.host.conf behind.
 ROOT_DOMAIN=
 ZONE_ID=
 while read -r line; do
@@ -84,12 +84,12 @@ echo "    DNS zone:    $ROOT_DOMAIN (ID $ZONE_ID), subdomain '$SUBDOMAIN'"
 
 # ── Resolve host.conf ────────────────────────────────────────────────
 # host-conf= is an escape hatch. Default flow: per-host file lives at
-# /etc/bbl-fs-<short>.host.conf and is auto-derived from the shared
-# secrets file at /etc/bbl-fs.host.conf on first provision. Re-provisions
-# reuse the existing per-host file so register.py IDs persist.
+# /etc/bbl-build-ch-<short>.host.conf and is auto-derived from the shared
+# secrets file at /etc/bbl-build-ch.host.conf on first provision. Re-provisions
+# reuse the existing per-host file across re-provisions.
 SHORT_HOST="${ARGS[hostname]%%.*}"
-PER_HOST_CONF="/etc/bbl-fs-${SHORT_HOST}.host.conf"
-SHARED_CONF="${BBL_FS_SHARED_CONF:-/etc/bbl-fs.host.conf}"
+PER_HOST_CONF="/etc/bbl-build-ch-${SHORT_HOST}.host.conf"
+SHARED_CONF="${BBL_CH_SHARED_CONF:-/etc/bbl-build-ch.host.conf}"
 
 if [[ -n "${ARGS[host-conf]}" ]]; then
     HOST_CONF="${ARGS[host-conf]}"
@@ -115,7 +115,7 @@ fi
 
 # Sanity: BBL_DOMAIN in the host.conf must match hostname=, or the box
 # identifies itself as something else (wrong TLS cert FQDN, wrong
-# Telnyx connection, etc.). Bit fs-test-4 on 2026-05-02 when an
+# Telnyx connection, etc.). Bit fs-test-4 on 2026-05-02 (FS-build); same trap applies here when an
 # fs-test-3 host.conf was reused.
 EXISTING_DOMAIN="$(awk -F= '/^BBL_DOMAIN=/{print $2; exit}' "$HOST_CONF" | tr -d ' \r')"
 if [[ -n "$EXISTING_DOMAIN" && "$EXISTING_DOMAIN" != "${ARGS[hostname]}" ]]; then
@@ -129,25 +129,25 @@ TMPDIR="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR"' EXIT
 
 # Construct cloud-init user_data combining:
-#   - /etc/bbl-fs-host.conf  (operator-supplied host knobs + secrets)
-#   - /etc/bbl-fs-bootstrap.env (build args for bootstrap.sh)
+#   - /etc/bbl-build-ch-host.conf  (operator-supplied host knobs + secrets)
+#   - /etc/bbl-build-ch-bootstrap.env (build args for bootstrap.sh)
 #   - bootstrap.sh runs as the cloud-init script
 cat > "$TMPDIR/user_data.yaml" <<EOF
 #cloud-config
 write_files:
-  - path: /etc/bbl-fs-host.conf
+  - path: /etc/bbl-build-ch-host.conf
     permissions: '0600'
     owner: root:root
     content: |
 $(sed 's/^/      /' "$HOST_CONF")
-  - path: /etc/bbl-fs-bootstrap.env
+  - path: /etc/bbl-build-ch-bootstrap.env
     permissions: '0644'
     content: |
       BBL_ROLE=${ARGS[role]}
       BBL_SIZE=${ARGS[size]}
       BBL_HOSTNAME=${ARGS[hostname]}
 runcmd:
-  - bash -c 'curl -fsSL https://raw.githubusercontent.com/bblv2/bbl-fs-build/main/bootstrap.sh | bash >>/var/log/bbl-fs-build.log 2>&1'
+  - bash -c 'curl -fsSL https://raw.githubusercontent.com/bblv2/bbl-build-ch/main/bootstrap.sh | bash >>/var/log/bbl-build-ch.log 2>&1'
 EOF
 
 # ── Create the Linode ────────────────────────────────────────────────
@@ -161,7 +161,7 @@ linode-cli linodes create \
     --root_pass "$ROOT_PASS" \
     --authorized_keys "$SSH_KEY" \
     --metadata.user_data "$(base64 < "$TMPDIR/user_data.yaml" | tr -d '\n')" \
-    --tags "bbl-fs,bbl-fs-${ARGS[role]},bbl-fs-${ARGS[size]}" \
+    --tags "bbl-ch,bbl-ch-${ARGS[role]},bbl-ch-${ARGS[size]}" \
     --no-defaults \
     --json > "$TMPDIR/linode.json"
 
@@ -203,48 +203,21 @@ done
     || { echo "WARN: DNS hasn't propagated after 5 min; cert step may fail. Continuing." >&2; }
 
 echo
-echo "==> Waiting for cloud-init to finish bbl-fs-build (~5 min)..."
-echo "    Tail with:  ssh root@$LINODE_IP tail -f /var/log/bbl-fs-build.log"
+echo "==> Waiting for cloud-init to finish bbl-build-ch (~5 min)..."
+echo "    Tail with:  ssh root@$LINODE_IP tail -f /var/log/bbl-build-ch.log"
 
-# ── Push bbl-fs-config to the new box BEFORE cloud-init's setup.sh
-#    needs it. The repo is private and the new box has no GitHub SSH
-#    key, so step 03-fs-config.sh would fail trying to clone it from
-#    GitHub. Wait for SSH to come up, then rsync from operators clone.
-LOCAL_CONFIG=${BBL_LOCAL_CONFIG_DIR:-/opt/bbl-fs/bbl-fs-config}
-echo "==> Waiting for SSH to come up on $LINODE_IP, then pushing bbl-fs-config"
-for _ in $(seq 1 30); do
-    if ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new \
-        "root@$LINODE_IP" 'test -d /usr/src' 2>/dev/null; then
-        break
-    fi
-    sleep 5
-done
-if [[ -d "$LOCAL_CONFIG" ]]; then
-    # Pull latest first, then push to box. Use tar-over-ssh instead of
-    # rsync because rsync isn't installed on the freshly-booted box yet
-    # (it comes in step 01). Tar-over-ssh works with just ssh + tar
-    # (both present in stock debian12). Step 03 detects the existing
-    # checkout and skips its git-fetch when GitHub SSH isn't available.
-    (cd "$LOCAL_CONFIG" && git pull --quiet 2>/dev/null || true)
-    ssh -o BatchMode=yes "root@$LINODE_IP" "mkdir -p /usr/src/bbl-fs-config && rm -rf /usr/src/bbl-fs-config/*"
-    tar -C "$LOCAL_CONFIG" -cf - . | \
-        ssh -o BatchMode=yes "root@$LINODE_IP" "tar -C /usr/src/bbl-fs-config -xf -" || \
-            echo "    WARN: bbl-fs-config tar push failed; setup.sh step 03 may also fail"
-else
-    echo "    WARN: $LOCAL_CONFIG not on operator host; step 03 will try GitHub clone"
-fi
 
-# ── Don't proceed until /etc/bbl-fs-build appears (setup.sh has finished)
+# ── Don't proceed until /etc/bbl-build-ch appears (setup.sh has finished)
 for _ in $(seq 1 60); do
     if ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new \
-        "root@$LINODE_IP" 'test -f /etc/bbl-fs-build' 2>/dev/null; then
+        "root@$LINODE_IP" 'test -f /etc/bbl-build-ch' 2>/dev/null; then
         break
     fi
     sleep 10
 done
 
 echo "==> Done. Build summary:"
-ssh -o BatchMode=yes "root@$LINODE_IP" 'cat /etc/bbl-fs-build' || true
+ssh -o BatchMode=yes "root@$LINODE_IP" 'cat /etc/bbl-build-ch' || true
 
 # ── post-build registration steps (operator-side) ──────────────────
 PY=/opt/bbl-call-tests/.venv/bin/python
@@ -260,26 +233,10 @@ CPU_COUNT=$(ssh -o BatchMode=yes "root@$LINODE_IP" 'nproc' 2>/dev/null || echo 1
     --role "${ARGS[role]}"
 
 # 2. role-specific registration
-if [[ "${ARGS[role]}" == "beta" ]]; then
-    echo
-    echo "==> Registering ${ARGS[hostname]} for beta testing (Telnyx + bridge + DID)"
-    REGOUT=$(mktemp)
-    "$PY" "$SCRIPTS/register.py" --hostname "${ARGS[hostname]}" | tee "$REGOUT"
-    # Append the persisted-IDs lines (they look like BBL_*=... after the
-    # printed "# Append to ..." marker) onto the operator's host.conf
-    if grep -q '^# Append to' "$REGOUT"; then
-        echo "" >> "$HOST_CONF"
-        echo "# bbl-fs-build register.py — written $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$HOST_CONF"
-        sed -n '/^# Append to/,$p' "$REGOUT" | grep -E '^BBL_' >> "$HOST_CONF"
-        echo "==> Persisted register IDs to $HOST_CONF"
-    fi
-    rm -f "$REGOUT"
-elif [[ "${ARGS[role]}" == "prod" ]]; then
-    echo
-    echo "==> Role=prod: minimal registration only (bbl2022 freeswitch_setup)"
-    echo "    (register-prod.sh not yet implemented — add manually for now)"
-fi
+# (none for ch boxes — register-monitor above is the full operator-side
+# registration. The next step is to add this host to lb-atl nginx upstream
+# at weight=0 manually, then ramp.)
 
 echo
 echo "==> Provision complete."
-echo "    Next: dial the Test DID printed above to verify end-to-end."
+echo "    Next: add to lb-atl nginx upstream at weight=0, then ramp."
