@@ -41,6 +41,13 @@ if ! id bbl >/dev/null 2>&1; then
 fi
 chown -R bbl:bbl "$DJANGO_DIR"
 
+# Django CACHES config has relative-path file caches ('cache' and
+# 'slack-cache'). Django resolves them relative to CWD, which depends on
+# where manage.py is invoked from. chb-atl has /projects/bbl-django/cache/
+# pre-existing — pre-create both here so cache backends don't crash on first
+# write.
+install -d -m 0700 -o bbl -g bbl "$DJANGO_DIR/cache" "$DJANGO_DIR/slack-cache"
+
 # ── Log directories ─────────────────────────────────────────────────
 mkdir -p /var/log/supervisor
 
@@ -120,6 +127,9 @@ chmod 600 "$HOST_SETTINGS"
 chown bbl:bbl "$HOST_SETTINGS"
 
 # Sanity: Django can load + see DATABASES
-sudo -u bbl /projects/bbl_env_py3/bin/python "$DJANGO_DIR/manage.py" check 2>&1 | tail -5
+# Run from $DJANGO_DIR so relative paths in settings (cache, staticfiles, etc.)
+# resolve correctly. Without the cd, Django uses CWD = wherever setup.sh was
+# invoked from (usually /usr/src/bbl-ch-build) and tries to mkdir cache there.
+( cd "$DJANGO_DIR" && sudo -u bbl /projects/bbl_env_py3/bin/python manage.py check 2>&1 | tail -5 )
 
 echo "==> 05-django-config complete"

@@ -7,13 +7,15 @@ apt-get update
 apt-get install -y \
     python3.11 python3.11-venv python3.11-dev python3-pip \
     postgresql-client \
-    redis-tools \
+    redis-server redis-tools \
     supervisor \
     nginx \
     build-essential libpq-dev libffi-dev libssl-dev libxml2-dev libxslt1-dev \
     curl ca-certificates \
     nodejs npm \
     rsync git
+
+systemctl enable --now redis-server
 
 # bower for the bblfrontend SPA build pipeline (we don't actually rebuild
 # the SPA on first provision — we git-checkout a prod-tested ref — but
