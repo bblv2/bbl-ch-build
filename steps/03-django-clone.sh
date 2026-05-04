@@ -13,6 +13,12 @@ VENV_DIR=/projects/bbl_env_py3
 
 mkdir -p /projects
 
+# Allow root to operate on a repo owned by the bbl user. Step 05 chowns
+# $DJANGO_DIR to bbl:bbl, then re-runs of step 03 hit git's "dubious
+# ownership" check (CVE-2022-24765 mitigation, on by default since git 2.35.2).
+# Setting this for root only — other users keep the safety check.
+git config --global --add safe.directory "$DJANGO_DIR"
+
 # ── Clone or fast-forward bbl-django ────────────────────────────────
 if [[ -d "$DJANGO_DIR/.git" ]]; then
     echo "==> bbl-django already cloned; fetching"
