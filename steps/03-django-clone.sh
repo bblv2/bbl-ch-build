@@ -32,6 +32,12 @@ fi
 
 echo "==> Installing requirements"
 "$VENV_DIR/bin/pip" install --upgrade pip wheel
+# Pin setuptools<58 to allow legacy Py2-era deps (anyjson 0.3.3 and similar)
+# that use the use_2to3 setup() flag, which setuptools removed in v58 (2021).
+# chb-atl's existing venv has these installed from earlier provisions when
+# setuptools<58 was the norm; fresh provisions hit "ERROR: use_2to3 is invalid".
+# Long-term: drop anyjson + pre-Py3 deps from requirements.txt. Then drop this.
+"$VENV_DIR/bin/pip" install 'setuptools<58'
 "$VENV_DIR/bin/pip" install -r "$DJANGO_DIR/requirements.txt"
 
 # Quick check — the django-upgrade branch should have Django 5.2.x
