@@ -41,8 +41,17 @@ if ! id bbl >/dev/null 2>&1; then
 fi
 chown -R bbl:bbl "$DJANGO_DIR"
 
-# ── Supervisor configs ──────────────────────────────────────────────
+# ── Log directories ─────────────────────────────────────────────────
 mkdir -p /var/log/supervisor
+
+# Django LOGGING config (in atl_settings.py) expects /var/log/bbl/{accounts,
+# general,requests}.log. Without the dir, app boot fails with
+# "ValueError: Unable to configure handler 'accounts_log_file'".
+mkdir -p /var/log/bbl
+chown bbl:bbl /var/log/bbl
+chmod 0775 /var/log/bbl
+
+# ── Supervisor configs ──────────────────────────────────────────────
 
 if [[ "$BBL_RUN_BEAT" == "true" ]]; then
     BBL_CELERY_BEAT_FLAG="-B"
