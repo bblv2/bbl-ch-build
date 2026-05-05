@@ -1,19 +1,23 @@
 #!/bin/bash
-# 04-cert.sh — Let's Encrypt certificates for FreeSWITCH WSS + SIP-TLS.
+# 06-cert.sh — Let's Encrypt cert issuance (opt-in for Django boxes).
 #
-# Uses acme.sh (lighter than certbot, no nginx dependency, --standalone
-# mode). On renewal, concatenates key+fullchain into wss.pem the way
-# mod_sofia wants and reloads the client profile.
+# DEFAULT: skipped. The standard ch-atlN deployment sits behind lb-atl
+# which terminates TLS, so this host has no need for its own cert. Only
+# opt in (BBL_SKIP_CERT=false in host.conf) when the box is going to
+# serve customer HTTPS directly.
+#
+# Body of this script is still bbl-fs-build's WSS-cert flow (acme.sh +
+# chown freeswitch:freeswitch + fs_cli reload hook). It will FAIL on a
+# Django box because there is no `freeswitch` user. Needs a Django-shaped
+# rewrite (nginx-reload hook, www-data ownership) before BBL_SKIP_CERT=false
+# is actually usable on a ch-atlN host. Burned ch-atl7 here 2026-05-05.
 set -euo pipefail
 
 # shellcheck disable=SC1091
 . "$BBL_HOST_CONF"
 
-# Django call-handler boxes only need their own cert if customer-facing
-# direct. In the standard ch-atl3 setup lb-atl terminates TLS and proxies
-# over HTTP — set BBL_SKIP_CERT=true in host.conf to skip this step.
-if [[ "${BBL_SKIP_CERT:-false}" == "true" ]]; then
-    echo "==> Skipping cert (BBL_SKIP_CERT=true)"
+if [[ "${BBL_SKIP_CERT:-true}" == "true" ]]; then
+    echo "==> Skipping cert (BBL_SKIP_CERT defaults to true for Django boxes; set =false to opt in)"
     exit 0
 fi
 
