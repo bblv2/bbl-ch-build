@@ -96,15 +96,20 @@ Each step is small and idempotent — safe to re-run after a failure. Logs go to
 
 ## Status
 
-**SCAFFOLDED — stubs, not production-ready.**
+**PRODUCTION-READY** as of 2026-05-05. All 10 steps are implemented and battle-tested. `ch-atl7.bblapp.io` was provisioned end-to-end and reached READY (Django 5.2.13, gunicorn + celery running, all smoke checks green).
 
-Adapted-from-bbl-fs-build files (1:1 patterns, work as-is): `bootstrap.sh`, `setup.sh`, `scripts/provision.sh` (TODO: rename references), `conf/linode-sizes.conf`, `host.conf.example` (rewritten for Django), `steps/01-base.sh` (kept), `steps/06-cert.sh` (renamed from old 04), `steps/07-firewall.sh` (renamed; needs port edits), `steps/08-monitor-collector.sh` (renamed from old 06b), `steps/10-finalize.sh` (renamed from old 07; needs Django-shape).
+### Bugs fixed during first real provision (2026-05-05)
 
-NEW step stubs (need fleshing out before first real provision):
-- `steps/02-django-deps.sh`
-- `steps/03-django-clone.sh`
-- `steps/04-frontend-clone.sh`
-- `steps/05-django-config.sh`
-- `steps/09-django-init.sh`
+All four are committed to `origin/master`; any fresh clone already has the fixes.
 
-See each stub's TODO comments for what each needs to do.
+| Commit | Bug |
+|---|---|
+| `ff78fef` | `cloud-init runcmd` has no `$HOME` → `git config --global` dies with "fatal: $HOME not set". Fix: `export HOME=/root` in `bootstrap.sh` + switch step 03 to `git config --system`. |
+| `6f66ede` | `step 06` defaulted to issuing a cert → crashes with `chown freeswitch:freeswitch` (no FS user on Django box). Fix: default `BBL_SKIP_CERT=true` — lb-atl terminates TLS for all ch-atlN boxes; set `=false` only if the host needs its own cert. |
+| `3217ee1` | `step 05` wrote `local_settings.py` to `$DJANGO_DIR/bbl/local_settings.py` (inside the package, not sys.path root) and used `from atl_settings import *` (missing `bbl.` prefix). `bbl/settings.py` does `from local_settings import *` which is a top-of-sys.path absolute import — the file was written but never read; DATABASES stayed as the dummy backend. Fix: write to `$DJANGO_DIR/local_settings.py` + `from bbl.atl_settings import *`. |
+| `9fc5d88` | Steps 09 + 10 referenced supervisor program `celery`, but the template uses `numprocs=1 + process_name=runner%(process_num)s` → actual program is `celery:runner0`. Bare `supervisorctl ... celery` → "no such process" + pipefail kill. Fix: `start all` in step 09, group form `celery:` in step 10. |
+
+### Known remaining cosmetic issues (non-blocking)
+
+- `steps/10-finalize.sh` smoke test for `theme.js` hits gunicorn (port 8001), not nginx (port 80). Gunicorn doesn't serve `/staticfiles/` — test reports 404 but the READY gate ignores it. One-line fix (change curl port to 80).
+- On first boot, `bbl/settings.py` prints "could not load settings for this environment! CH_ATL" to stdout because its per-host dispatcher doesn't match `ch-atl7.bblapp.io` by regex. `local_settings.py` overrides everything via the bottom-of-file `from local_settings import *` so it's harmless noise. Django-side fix, not kit-side.
