@@ -118,6 +118,10 @@ DATABASES = {
     }
 }
 SECRET_KEY = "$BBL_DJANGO_SECRET_KEY"
+# bblapp.io cookie scope so sessions work on beta.bblapp.io as well as
+# chb-atl.bblapp.io. atl_settings sets .brandedbridgeline.com which is
+# the wrong TLD for any bblapp.io-hosted CH. Burned beta login 2026-05-05.
+SESSION_COOKIE_DOMAIN = ".bblapp.io"
 PYSETTINGS
 
 # Optional secrets — append only if set in host.conf
