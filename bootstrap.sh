@@ -6,6 +6,12 @@
 # passed via the metadata service. Keep this short and boring.
 set -euo pipefail
 
+# cloud-init's runcmd does NOT export $HOME; without it any `git config
+# --global`, ssh-key lookup against ~/.ssh, etc. dies with
+# "fatal: $HOME not set". Pin it before sourcing or running anything
+# downstream so every step inherits it. Burned ch-atl6 + ch-atl7 here.
+export HOME="${HOME:-/root}"
+
 # Provisioning args come from /etc/bbl-ch-bootstrap.env that the
 # linode-cli wrapper writes via user_data. If absent, fall back to
 # defaults so manual SSH-and-rerun works too.
