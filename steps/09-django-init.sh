@@ -49,9 +49,15 @@ if [[ "$unapplied" -ne 0 ]]; then
 fi
 
 # ── Start supervisor ────────────────────────────────────────────────
+# `reread + update` re-reads conf.d files and adds new program groups.
+# The celery template uses numprocs=1 + process_name=runner%(process_num)s,
+# so the actual program is `celery:runner0`. Use `start all` to avoid
+# coupling this script to the group/child naming, and tolerate
+# "already started" since autostart=true on each program means update
+# itself starts them. Burned ch-atl7 here.
 supervisorctl reread
 supervisorctl update
-supervisorctl start bbl celery
+supervisorctl start all 2>&1 | grep -vE 'already started|ERROR \(no such process\)' || true
 
 # ── Smoke test ──────────────────────────────────────────────────────
 sleep 3

@@ -17,8 +17,12 @@ frontend_ref=$(cd "$FRONTEND_DIR" && git describe --tags --always 2>/dev/null ||
 django_version=$(/projects/bbl_env_py3/bin/python -c 'import django; print(django.__version__)' 2>/dev/null || echo "?")
 python_version=$(/projects/bbl_env_py3/bin/python --version 2>&1 | awk '{print $2}')
 kernel=$(uname -r)
-celery_running=$(supervisorctl status celery 2>&1 | head -1)
-gunicorn_running=$(supervisorctl status bbl 2>&1 | head -1)
+# Use the group form `celery:` — the celery program runs under group
+# `celery:runner0` (numprocs=1 + process_name= renames the child),
+# so plain `status celery` returns "no such process" + nonzero exit
+# and pipefail kills the script. `|| true` belt-and-suspenders.
+celery_running=$(supervisorctl status celery: 2>&1 | head -1 || true)
+gunicorn_running=$(supervisorctl status bbl 2>&1 | head -1 || true)
 
 cat > /etc/bbl-ch-build <<MANIFEST
 # bbl-ch-build — build manifest
