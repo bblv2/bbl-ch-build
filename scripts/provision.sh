@@ -2,8 +2,15 @@
 # provision.sh — create a new Django call-handler Linode using bbl-ch-build.
 #
 # Usage:
+#   scripts/provision.sh role=beta size=medium n=4
+#       shortcut → hostname=ch-atl4.bblapp.io  (prod naming convention)
 #   scripts/provision.sh role=beta size=medium hostname=ch-test-1.bblapp.io
 #   scripts/provision.sh role=prod size=large  hostname=ch-atl-3.bblapp.io
+#
+# n= and hostname= are mutually exclusive. n= refuses to clobber an
+# already-provisioned ch-atl<N> (Linode label collision OR DNS already
+# pointing somewhere else) — guards against e.g. n=1 silently repointing
+# production's ch-atl1.bblapp.io at a fresh empty box.
 #
 # host-conf= is optional. If omitted, the script reads shared secrets
 # from /etc/bbl-ch.host.conf, derives a per-host file at
@@ -26,16 +33,33 @@ if [[ -r "$OPERATOR_ENV" ]]; then
 fi
 
 # ── Parse args ───────────────────────────────────────────────────────
-declare -A ARGS=( [role]= [size]= [hostname]= [host-conf]= [region]=us-southeast )
+declare -A ARGS=( [role]= [size]= [hostname]= [host-conf]= [region]=us-southeast [n]= )
 for kv in "$@"; do
     k="${kv%%=*}"
     v="${kv#*=}"
     [[ -n "${ARGS[$k]+_}" ]] || { echo "unknown arg: $k" >&2; exit 2; }
     ARGS[$k]="$v"
 done
-for required in role size hostname; do
+
+# n= shortcut: expand to ch-atl<N>.bblapp.io (prod convention). Mutually
+# exclusive with hostname=.
+if [[ -n "${ARGS[n]}" ]]; then
+    if [[ -n "${ARGS[hostname]}" ]]; then
+        echo "$0: pass either n= or hostname=, not both" >&2
+        exit 2
+    fi
+    if ! [[ "${ARGS[n]}" =~ ^[0-9]+$ ]]; then
+        echo "$0: n= must be a non-negative integer (got '${ARGS[n]}')" >&2
+        exit 2
+    fi
+    ARGS[hostname]="ch-atl${ARGS[n]}.bblapp.io"
+    echo "==> n=${ARGS[n]} → hostname=${ARGS[hostname]}"
+fi
+
+for required in role size; do
     [[ -n "${ARGS[$required]}" ]] || { echo "$0: $required is required" >&2; exit 2; }
 done
+[[ -n "${ARGS[hostname]}" ]] || { echo "$0: hostname= or n= is required" >&2; exit 2; }
 
 # Hostname format precheck. Must be FQDN with at least one dot, and
 # the part before the first dot must be non-empty. Rejects shorthand
@@ -54,6 +78,23 @@ SKU="$(awk -v size="${ARGS[size]}" '$1 == size {print $2}' "$SIZES_FILE")"
 
 LABEL="${ARGS[hostname]//./-}"
 ROOT_PASS="$(openssl rand -base64 24)"
+
+# ── Refuse-to-clobber: bail if a Linode with this label already exists,
+# OR if DNS already resolves the hostname to a non-matching IP. Catches
+# the n=1 → ch-atl1.bblapp.io footgun (production lives there).
+EXISTING_LINODE="$(linode-cli linodes list --json \
+    | jq -r --arg L "$LABEL" '.[] | select(.label == $L) | "\(.id) \(.ipv4[0]) \(.status)"')"
+if [[ -n "$EXISTING_LINODE" ]]; then
+    echo "$0: Linode label '$LABEL' already exists: $EXISTING_LINODE" >&2
+    echo "    pick a different n= / hostname=, or destroy the existing Linode first." >&2
+    exit 2
+fi
+DNS_CURRENT="$(dig +short "${ARGS[hostname]}" @ns1.linode.com 2>/dev/null | tail -1)"
+if [[ -n "$DNS_CURRENT" ]]; then
+    echo "$0: DNS for '${ARGS[hostname]}' already points at $DNS_CURRENT" >&2
+    echo "    pick a different n= / hostname=, or remove the existing A record first." >&2
+    exit 2
+fi
 
 echo "==> Provisioning ${ARGS[hostname]} as Linode $SKU in ${ARGS[region]}"
 
