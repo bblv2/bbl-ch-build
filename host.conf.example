@@ -76,3 +76,11 @@ BBL_MONITOR_TOKEN=
 # Extra DNS aliases nginx should accept (space-separated). Always-on:
 # BBL_HOSTNAME (auto-set during provision).
 # BBL_DOMAIN_ALIASES=app.brandedbridgeline.com beta.bblapp.io
+
+# ── Deployment role ─────────────────────────────────────────────────
+# BBL_ROLE=prod   Production CH (lb-atl pool, serves app.brandedbridgeline.com)
+# BBL_ROLE=beta   Beta CH (lbb-atl pool, serves beta.bblapp.io)
+# Determines SESSION_COOKIE_DOMAIN default (prod→.brandedbridgeline.com, beta→.bblapp.io).
+# Override BBL_SESSION_COOKIE_DOMAIN explicitly for unusual setups.
+# BBL_ROLE=prod
+# BBL_SESSION_COOKIE_DOMAIN=.brandedbridgeline.com
