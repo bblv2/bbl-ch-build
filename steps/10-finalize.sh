@@ -83,12 +83,12 @@ echo "════════════════════════�
 echo
 
 GUNICORN_HEALTH=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8001/bbladmin/login/ 2>&1 || echo "ERR")
-THEME_JS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8001/staticfiles/admin/js/theme.js 2>&1 || echo "ERR")
+THEME_JS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1/staticfiles/admin/js/theme.js 2>&1 || echo "ERR")
 NGINX_HEALTH=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1/nginx_status 2>&1 || echo "ERR")
 SPA_INDEX=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1/app/ 2>&1 || echo "ERR")
 
 echo "gunicorn /bbladmin/login/         $GUNICORN_HEALTH  (expect 200)"
-echo "gunicorn /staticfiles/admin/js/theme.js   $THEME_JS  (expect 200)"
+echo "nginx    /staticfiles/admin/js/theme.js   $THEME_JS  (expect 200)"
 echo "nginx /nginx_status               $NGINX_HEALTH  (expect 200)"
 echo "nginx /app/  (frontend SPA)       $SPA_INDEX  (expect 200)"
 echo

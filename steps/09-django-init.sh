@@ -62,4 +62,4 @@ supervisorctl start all 2>&1 | grep -vE 'already started|ERROR \(no such process
 # ── Smoke test ──────────────────────────────────────────────────────
 sleep 3
 curl -sk -o /dev/null -w 'gunicorn http=%{http_code}\n' http://127.0.0.1:8001/bbladmin/login/
-curl -sk -o /dev/null -w 'theme.js http=%{http_code}\n' http://127.0.0.1:8001/staticfiles/admin/js/theme.js
+curl -sk -o /dev/null -w 'theme.js http=%{http_code}\n' http://127.0.0.1/staticfiles/admin/js/theme.js
