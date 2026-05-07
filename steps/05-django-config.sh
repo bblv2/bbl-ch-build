@@ -184,6 +184,10 @@ PYSETTINGS
 [[ -n "${BBL_TELNYX_API_KEY:-}" ]] && echo "TELNYX_API_KEY = \"$BBL_TELNYX_API_KEY\"" >> "$HOST_SETTINGS"
 [[ -n "${BBL_BUGCATCHER_DSN:-}" ]] && echo "BUGCATCHER_DSN = '$BBL_BUGCATCHER_DSN'" >> "$HOST_SETTINGS"
 
+# DEBUG_SWITCHBOARD: dashed-banner stderr trace for FS-facing switchboard views.
+# Off by default; opt-in for beta diagnostic CHs via BBL_DEBUG_SWITCHBOARD=true.
+[[ "${BBL_DEBUG_SWITCHBOARD:-false}" == "true" ]] && echo "DEBUG_SWITCHBOARD = True" >> "$HOST_SETTINGS"
+
 chmod 600 "$HOST_SETTINGS"
 chown bbl:bbl "$HOST_SETTINGS"
 

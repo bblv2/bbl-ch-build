@@ -87,3 +87,10 @@ BBL_MONITOR_TOKEN=
 # Override BBL_SESSION_COOKIE_DOMAIN explicitly for unusual setups.
 # BBL_ROLE=prod
 # BBL_SESSION_COOKIE_DOMAIN=.brandedbridgeline.com
+
+# ── Switchboard debug logging ───────────────────────────────────────
+# Set to "true" to wrap every FS-facing switchboard view (RING, PIN_INPUT,
+# WAIT, FLOOR_SPEAKER_EVENT, etc.) with the dashed-banner debug decorator
+# (request POST + rendered XML to stderr). Default off — verbose. Useful
+# for diagnosing call-flow regressions on a freshly-provisioned beta CH.
+# BBL_DEBUG_SWITCHBOARD=true
