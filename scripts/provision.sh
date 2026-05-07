@@ -273,7 +273,7 @@ echo "    Tail with:  ssh root@$LINODE_IP tail -f /var/log/bbl-ch-build.log"
 
 # ── Don't proceed until /etc/bbl-ch-build appears (setup.sh has finished)
 for _ in $(seq 1 60); do
-    if ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new \
+    if ssh -o BatchMode=yes -o LogLevel=ERROR -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new \
         "root@$LINODE_IP" 'test -f /etc/bbl-ch-build' 2>/dev/null; then
         break
     fi
@@ -281,7 +281,7 @@ for _ in $(seq 1 60); do
 done
 
 echo "==> Done. Build summary:"
-ssh -o BatchMode=yes "root@$LINODE_IP" 'cat /etc/bbl-ch-build' || true
+ssh -o BatchMode=yes -o LogLevel=ERROR "root@$LINODE_IP" 'cat /etc/bbl-ch-build' || true
 
 # ── post-build registration steps (operator-side) ──────────────────
 PY=/opt/bbl-call-tests/.venv/bin/python
@@ -290,7 +290,7 @@ SCRIPTS="$(cd "$(dirname "$0")" && pwd)"
 # 1. Always: register in bbl-monitor (every linode goes here)
 echo
 echo "==> Registering ${ARGS[hostname]} in bbl-monitor"
-CPU_COUNT=$(ssh -o BatchMode=yes "root@$LINODE_IP" 'nproc' 2>/dev/null || echo 1)
+CPU_COUNT=$(ssh -o BatchMode=yes -o LogLevel=ERROR "root@$LINODE_IP" 'nproc' 2>/dev/null || echo 1)
 "$PY" "$SCRIPTS/register-monitor.py" \
     --hostname "${ARGS[hostname]}" \
     --cpu-count "$CPU_COUNT" \
