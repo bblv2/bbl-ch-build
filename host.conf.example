@@ -45,6 +45,9 @@ BBL_MAILGUN_API_KEY=
 BBL_MAILGUN_DOMAIN=
 BBL_TELNYX_USER=
 BBL_TELNYX_TOKEN=
+# Telnyx V2 API key (Bearer auth — separate from V1 USER/TOKEN above).
+# Used by cutover.sh and any V2 API automation. Find via: portal → Auth → API Keys.
+BBL_TELNYX_API_KEY=
 BBL_BUGCATCHER_DSN=
 
 # ── TLS cert ────────────────────────────────────────────────────────
