@@ -13,7 +13,8 @@ apt-get install -y \
     build-essential libpq-dev libffi-dev libssl-dev libxml2-dev libxslt1-dev \
     curl ca-certificates \
     nodejs npm \
-    rsync git
+    rsync git \
+    sox libsox-fmt-mp3
 
 systemctl enable --now redis-server
 

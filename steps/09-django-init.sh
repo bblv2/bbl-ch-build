@@ -29,6 +29,14 @@ test -f "$DJANGO_DIR/staticfiles/admin/js/theme.js" || {
     exit 1
 }
 
+# ── Media runtime directories ────────────────────────────────────────
+# media/files/names is not tracked by git (no .gitkeep) because the directory
+# was added for announce-name v2 after the repo was set up. Django downloads
+# name recordings there before the sox silence check. Create here so fresh
+# clones don't silently skip the sox check due to a missing directory.
+echo "==> Ensuring media runtime directories"
+install -d -m 0777 -o bbl -g bbl     "$DJANGO_DIR/bbl/media/files/names"
+
 # ── Migrations — handle the bridges.0049 schema drift ──────────────
 echo "==> Running migrate (will fail at bridges.0049 with DuplicateColumn — expected)"
 if "$PY" manage.py migrate --noinput; then
