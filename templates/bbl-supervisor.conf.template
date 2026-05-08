@@ -8,3 +8,4 @@ stdout_logfile = /var/log/supervisor/bbl.stdout.log
 stderr_logfile = /var/log/supervisor/bbl.stderr.log
 stdout_logfile_maxbytes = 100MB
 stderr_logfile_maxbytes = 100MB
+environment=REDIS_TRACE_URL="__BBL_REDIS_TRACE_URL__"

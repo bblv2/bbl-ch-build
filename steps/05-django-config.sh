@@ -18,6 +18,7 @@ BBL_GUNICORN_WORKERS="${BBL_GUNICORN_WORKERS:-9}"
 BBL_RUN_BEAT="${BBL_RUN_BEAT:-false}"   # SAFE DEFAULT: no beat; flip to true later
 BBL_DOMAIN_ALIASES="${BBL_DOMAIN_ALIASES:-}"
 BBL_ROLE="${BBL_ROLE:-prod}"
+BBL_REDIS_TRACE_URL="${BBL_REDIS_TRACE_URL:-}"   # rpt redis URL for /call-trace dual-write; empty = disabled
 
 # SESSION_COOKIE_DOMAIN: defaults from role so operators only override for unusual setups.
 # beta → bblapp.io (lbb-atl/beta.bblapp.io frontend domain)
@@ -82,6 +83,7 @@ fi
 
 sed -e "s|__BBL_GUNICORN_BIND__|$BBL_GUNICORN_BIND|g" \
     -e "s|__BBL_GUNICORN_WORKERS__|$BBL_GUNICORN_WORKERS|g" \
+    -e "s|__BBL_REDIS_TRACE_URL__|$BBL_REDIS_TRACE_URL|g" \
     "$TPL/bbl-supervisor.conf.template" > /etc/supervisor/conf.d/bbl.conf
 
 sed -e "s|__BBL_CELERY_BEAT_FLAG__|$BBL_CELERY_BEAT_FLAG|g" \

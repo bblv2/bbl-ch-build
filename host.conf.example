@@ -94,3 +94,12 @@ BBL_MONITOR_TOKEN=
 # (request POST + rendered XML to stderr). Default off — verbose. Useful
 # for diagnosing call-flow regressions on a freshly-provisioned beta CH.
 # BBL_DEBUG_SWITCHBOARD=true
+
+# ── /call-trace Redis dual-write ────────────────────────────────────
+# rpt-side Redis URL for the bbl:trace stream consumed by bbl-monitor
+# /call-trace. Django's switchboard views XADD a per-request event with
+# the rendered XML body so the UI can show the relay↔Django dialog.
+# Empty / unset = dual-write disabled (safe default; relay-side events
+# still reach the stream from esl_outbound, but XML won't render in the
+# timeline because there's no django-side counterpart).
+# BBL_REDIS_TRACE_URL=redis://:PASSWORD@45.79.211.163:6379/0
