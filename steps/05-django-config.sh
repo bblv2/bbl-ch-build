@@ -15,9 +15,18 @@ source "${BBL_HOST_CONF:-/etc/bbl-ch-host.conf}"
 # Defaults that can be overridden in host.conf
 BBL_GUNICORN_BIND="${BBL_GUNICORN_BIND:-127.0.0.1:8001}"
 BBL_GUNICORN_WORKERS="${BBL_GUNICORN_WORKERS:-9}"
-BBL_RUN_BEAT="${BBL_RUN_BEAT:-false}"   # SAFE DEFAULT: no beat; flip to true later
 BBL_DOMAIN_ALIASES="${BBL_DOMAIN_ALIASES:-}"
 BBL_ROLE="${BBL_ROLE:-prod}"
+# celery beat default: only ONE host in the cluster runs beat (else
+# scheduled tasks fire N times). Default true for prod role and false
+# otherwise; explicit BBL_RUN_BEAT in host.conf wins either way.
+if [[ -z "${BBL_RUN_BEAT:-}" ]]; then
+    if [[ "$BBL_ROLE" == "prod" ]]; then
+        BBL_RUN_BEAT=true
+    else
+        BBL_RUN_BEAT=false
+    fi
+fi
 BBL_REDIS_TRACE_URL="${BBL_REDIS_TRACE_URL:-}"   # rpt redis URL for /call-trace dual-write; empty = disabled
 
 # SESSION_COOKIE_DOMAIN: defaults from role so operators only override for unusual setups.

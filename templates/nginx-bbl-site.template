@@ -43,7 +43,14 @@ server {
 
   location ~ /\. { deny all; }
 
-  # bbl-esl WebSocket (proxied to ch-atl-node, node-cc service)
+  # ch-atl-node (legacy node-cc /wss + /call-control endpoints) — host
+  # was decommissioned; DNS no longer resolves and would fail nginx -t
+  # at startup. We use a resolver + variable so DNS lookup happens at
+  # request time (route returns 502 if hit, but the box boots).
+  # If /wss or /call-control traffic ever resumes, repoint these at
+  # the new bbl-esl service (lbb-atl / lb-atl).
+  resolver 127.0.0.53 valid=30s ipv6=off;
+
   location /wss {
     error_log /var/log/wss-error.log error;
     proxy_set_header Upgrade $http_upgrade;
@@ -51,13 +58,14 @@ server {
     proxy_http_version 1.1;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header Host $host;
-    proxy_pass http://ch-atl-node.bblapp.io:3002/wss;
+    set $ch_atl_node "ch-atl-node.bblapp.io";
+    proxy_pass http://$ch_atl_node:3002/wss;
   }
 
-  # bbl-esl call-control HTTP API
   location /call-control {
     error_log /var/log/css-error.log error;
-    proxy_pass http://ch-atl-node.bblapp.io:3001;
+    set $ch_atl_node "ch-atl-node.bblapp.io";
+    proxy_pass http://$ch_atl_node:3001;
   }
 
   # Django apps
