@@ -32,9 +32,9 @@ BBL_FRONTEND_REF=prod-2026-05-03
 # Source of truth: copy from ch-atl1's current settings (verify with:
 # grep -E '^(SECRET_KEY|DATABASES|REDIS|STRIPE|MAILGUN|TELNYX)' on ch-atl1).
 BBL_DJANGO_SECRET_KEY=
-BBL_DB_HOST=lb-atl.bblapp.io
+BBL_DB_HOST=db-atl.bblapp.io
 BBL_DB_PORT=5432
-BBL_DB_NAME=bbl2022
+BBL_DB_NAME=bbl
 BBL_DB_USER=bbldbuser
 BBL_DB_PASSWORD=
 BBL_REDIS_URL=redis://lb-atl.bblapp.io:6379/0
