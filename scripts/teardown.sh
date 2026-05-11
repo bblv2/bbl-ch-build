@@ -1,5 +1,5 @@
 #!/bin/bash
-# teardown.sh — destroy a bbl-fs Linode cleanly.
+# teardown.sh — destroy a bbl-ch Linode cleanly.
 #
 # Safety: requires --confirm flag. Never tears down hosts without
 # explicit operator OK. Snapshots the disk before deletion so a 30-day
@@ -28,14 +28,14 @@ done
 [[ -n "$HOSTNAME" ]] || { echo "usage: $0 hostname=<fqdn> [host-conf=<path>] --confirm [--no-snapshot]" >&2; exit 2; }
 LABEL="${HOSTNAME//./-}"
 
-# host-conf default: /etc/bbl-fs-<short>.host.conf (where provision.sh
-# persisted register.py IDs). Skip silently if absent — happens for
-# prod boxes (no register IDs to roll back) and pre-2026-05 builds.
+# host-conf default: /etc/bbl-ch-<short>.host.conf (where provision.sh
+# persisted BBL_DB_HBA_* state for pg_hba cleanup). Skip silently if
+# absent — happens for hand-built boxes and pre-pg_hba-automation builds.
 if [[ -z "$HOST_CONF" ]]; then
-    DEFAULT_HOST_CONF="/etc/bbl-fs-${HOSTNAME%%.*}.host.conf"
+    DEFAULT_HOST_CONF="/etc/bbl-ch-${HOSTNAME%%.*}.host.conf"
     if [[ -r "$DEFAULT_HOST_CONF" ]]; then
         HOST_CONF="$DEFAULT_HOST_CONF"
-        echo "==> Using $HOST_CONF for unregister"
+        echo "==> Using $HOST_CONF for pg_hba cleanup"
     fi
 fi
 
@@ -50,28 +50,44 @@ if (( ! CONFIRM )); then
     exit 1
 fi
 
-# 0. Pre-delete: unregister from BBL infrastructure (best-effort)
 PY=/opt/bbl-call-tests/.venv/bin/python
 SCRIPTS="$(cd "$(dirname "$0")" && pwd)"
 
+# 0. Pre-delete: remove pg_hba entry on db-atl (best-effort).
 if [[ -n "$HOST_CONF" && -r "$HOST_CONF" ]]; then
-    echo "==> Unregistering beta-side bookings (DID, bridge, freeswitch_setup, Telnyx)"
-    "$PY" "$SCRIPTS/unregister.py" --hostname "$HOSTNAME" --host-conf "$HOST_CONF" || true
+    # Source the state file into a subshell so we don't leak vars.
+    (
+        set -a; . "$HOST_CONF"; set +a
+        if [[ -n "${BBL_DB_HBA_HOST:-}" && -n "${BBL_DB_HBA_DB:-}" \
+              && -n "${BBL_DB_HBA_USER:-}" && -n "${BBL_DB_HBA_IP:-}" ]]; then
+            PGHBA="${BBL_DB_HBA_PATH:-/etc/postgresql/16/main/pg_hba.conf}"
+            # Escape dots for sed regex.
+            IP_RE="${BBL_DB_HBA_IP//./\\.}"
+            echo "==> Removing pg_hba entry on $BBL_DB_HBA_HOST ($BBL_DB_HBA_DB / $BBL_DB_HBA_USER / $BBL_DB_HBA_IP)"
+            ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new \
+                "$BBL_DB_HBA_HOST" "sudo bash -lc '
+                    PGHBA=$PGHBA
+                    BEFORE=\$(grep -cE \"^host[[:space:]]+$BBL_DB_HBA_DB[[:space:]]+$BBL_DB_HBA_USER[[:space:]]+$IP_RE[[:space:]]\" \$PGHBA || true)
+                    if (( BEFORE > 0 )); then
+                        sed -i.bak -E \"/^host[[:space:]]+$BBL_DB_HBA_DB[[:space:]]+$BBL_DB_HBA_USER[[:space:]]+$IP_RE[[:space:]]/d\" \$PGHBA
+                        systemctl reload postgresql
+                        echo \"  removed \$BEFORE line(s) + postgresql reloaded\"
+                    else
+                        echo \"  (no matching line)\"
+                    fi
+                '" || true
+        else
+            echo "==> Skipping pg_hba cleanup (no BBL_DB_HBA_* in $HOST_CONF)"
+        fi
+    )
 else
-    echo "==> Skipping beta unregister (no --host-conf supplied)"
+    echo "==> Skipping pg_hba cleanup (no --host-conf and no auto-derived state file)"
 fi
 
 echo "==> Disabling host in bbl-monitor"
 "$PY" "$SCRIPTS/unregister-monitor.py" --hostname "$HOSTNAME" || true
 
-# 1. Drain: shut down FS gracefully so in-flight calls aren't dropped
-# mid-conversation. fs_cli shutdown returns when all calls have ended.
-echo "==> Draining FreeSWITCH (waiting for active calls to end)"
-IP="$(linode-cli linodes view "$LID" --json | jq -r '.[0].ipv4[0]')"
-ssh "root@$IP" 'fs_cli -x "fsctl shutdown elegant"' || true
-sleep 5
-
-# 2. Snapshot for rollback (only if Backups service is enabled on this Linode;
+# 1. Snapshot for rollback (only if Backups service is enabled on this Linode;
 #    Linode rejects snapshot calls with HTTP 400 otherwise)
 if (( SNAPSHOT )); then
     BACKUPS_ENABLED="$(linode-cli linodes view "$LID" --json | jq -r '.[0].backups.enabled // false')"
@@ -84,11 +100,11 @@ if (( SNAPSHOT )); then
     fi
 fi
 
-# 3. Delete
+# 2. Delete
 echo "==> Deleting linode $LID"
 linode-cli linodes delete "$LID"
 
-# 4. Remove the DNS A record
+# 3. Remove the DNS A record
 ROOT_DOMAIN=
 ZONE_ID=
 while read -r line; do
@@ -110,13 +126,13 @@ if [[ -n "$ZONE_ID" ]]; then
     fi
 fi
 
-# 5. Remove the auto-derived per-host conf so a future re-spawn with
-#    the same hostname doesn't reuse stale register IDs. Only delete
+# 4. Remove the auto-derived per-host state file so a future re-spawn
+#    with the same hostname doesn't reuse stale pg_hba state. Only delete
 #    if it matches the auto-derive convention; never touch an
 #    operator-supplied host-conf path.
-DEFAULT_HOST_CONF="/etc/bbl-fs-${HOSTNAME%%.*}.host.conf"
+DEFAULT_HOST_CONF="/etc/bbl-ch-${HOSTNAME%%.*}.host.conf"
 if [[ "$HOST_CONF" == "$DEFAULT_HOST_CONF" && -f "$HOST_CONF" ]]; then
-    echo "==> Removing per-host conf $HOST_CONF"
+    echo "==> Removing per-host state $HOST_CONF"
     rm -f "$HOST_CONF"
 fi
 

@@ -255,6 +255,60 @@ echo "  Linode ID:   $LINODE_ID"
 echo "  Public IPv4: $LINODE_IP"
 echo "  Root pass:   $ROOT_PASS  (write this down — Linode does not store it)"
 
+# ── Authorize the new box in db-atl pg_hba.conf ──────────────────────
+# Cloud-init runs setup → step 05-django-config → migrate inside the
+# next few minutes. Without a pg_hba entry for $LINODE_IP, every Django
+# DB call dies with "no pg_hba.conf entry for host". Append the line
+# now (well ahead of step 05) and reload postgres. Idempotent: skip if
+# the line already exists.
+# Persist BBL_DB_HBA_* to /etc/bbl-ch-<short>.host.conf so teardown.sh
+# can remove the right line later.
+case "${ARGS[role]}" in
+    beta) DB_HBA_DB=bbl_beta ;;
+    prod) DB_HBA_DB=bbl ;;
+    *)    DB_HBA_DB= ;;
+esac
+DB_HBA_HOST="${BBL_DB_HBA_HOST:-db-atl.bblapp.io}"
+DB_HBA_USER="${BBL_DB_HBA_USER:-bbldbuser}"
+DB_HBA_PATH="${BBL_DB_HBA_PATH:-/etc/postgresql/16/main/pg_hba.conf}"
+
+if [[ -n "$DB_HBA_DB" ]]; then
+    echo
+    echo "==> Authorizing $LINODE_IP in $DB_HBA_HOST pg_hba ($DB_HBA_DB / $DB_HBA_USER)"
+    ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new \
+        "$DB_HBA_HOST" "sudo bash -lc '
+            PGHBA=$DB_HBA_PATH
+            LINE=\"host    $DB_HBA_DB  $DB_HBA_USER    $LINODE_IP/32     scram-sha-256   # ${ARGS[hostname]}\"
+            if grep -qE \"^host[[:space:]]+$DB_HBA_DB[[:space:]]+$DB_HBA_USER[[:space:]]+$LINODE_IP/32\" \$PGHBA; then
+                echo \"  (already present)\"
+            else
+                echo \"\$LINE\" >> \$PGHBA
+                systemctl reload postgresql
+                echo \"  appended + postgresql reloaded\"
+            fi
+        '"
+
+    # Persist state for teardown — same pattern as fs-build's register.py
+    # output. State file, not a seed: provision.sh assembles host.conf
+    # from VCS seeds + loose secrets, this file is only read by teardown.sh.
+    REG_STATE="/etc/bbl-ch-${SHORT_HOST}.host.conf"
+    {
+        echo "# bbl-ch-build pg_hba state for ${ARGS[hostname]}"
+        echo "# Written $(date -u +%Y-%m-%dT%H:%M:%SZ) — consumed by teardown.sh."
+        echo "# NOT a seed file; provision.sh assembles host.conf from VCS seeds + /etc/bbl-ch-secrets.conf."
+        echo "BBL_DOMAIN=${ARGS[hostname]}"
+        echo "BBL_DB_HBA_HOST=$DB_HBA_HOST"
+        echo "BBL_DB_HBA_DB=$DB_HBA_DB"
+        echo "BBL_DB_HBA_USER=$DB_HBA_USER"
+        echo "BBL_DB_HBA_IP=$LINODE_IP/32"
+        echo "BBL_DB_HBA_PATH=$DB_HBA_PATH"
+    } | sudo tee "$REG_STATE" >/dev/null
+    sudo chmod 0600 "$REG_STATE"
+    echo "==> Persisted pg_hba state to $REG_STATE"
+else
+    echo "==> Skipping pg_hba authorization (role=${ARGS[role]} has no DB mapping)"
+fi
+
 # ── Create DNS A record + wait for propagation ───────────────────────
 # Idempotent: if a record for this subdomain already exists, update it
 # instead of failing.
