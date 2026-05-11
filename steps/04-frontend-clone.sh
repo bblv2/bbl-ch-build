@@ -10,7 +10,7 @@
 #   git add build/ && git commit -m "Snapshot prod build $(date +%F)"
 #   git tag prod-$(date +%F-%H%M)
 #   git push origin master --tags
-#   # Then in /etc/bbl-ch.host.conf set BBL_FRONTEND_REF=prod-2026-MM-DD-HHMM
+#   # Then in seeds/defaults.conf set BBL_FRONTEND_REF=prod-2026-MM-DD-HHMM and commit
 set -euo pipefail
 
 source "${BBL_HOST_CONF:-/etc/bbl-ch-host.conf}"
