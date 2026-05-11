@@ -38,8 +38,16 @@ Pick to match expected load. ch-atl1 today is roughly large-equivalent.
 # 1. Prerequisites (one-time on operator's machine — same as bbl-fs-build)
 brew install linode-cli jq                # macOS
 linode-cli configure                       # paste API token
-sudo cp host.conf.example /etc/bbl-ch.host.conf
-sudo $EDITOR /etc/bbl-ch.host.conf  # fill in shared secrets
+
+# Non-secret defaults + per-host overrides ship with this repo at
+#   seeds/defaults.conf  and  seeds/hosts/<short>.conf
+# Only secrets stay loose on rpt:
+sudo install -m 0700 -d /etc/bbl-ch-secrets.d
+sudo cp seeds/secrets.example.conf /etc/bbl-ch-secrets.conf
+sudo chmod 0600 /etc/bbl-ch-secrets.conf
+sudo $EDITOR /etc/bbl-ch-secrets.conf      # fill in real values
+# Per-host secret overrides (rare — e.g. bbl26 cluster's SECRET_KEY) go in
+#   /etc/bbl-ch-secrets.d/<short>.conf  (mode 0600)
 
 # 2. Provision
 ./scripts/provision.sh \
@@ -90,8 +98,9 @@ Each step is small and idempotent — safe to re-run after a failure. Logs go to
 
 ## Security
 
-- `host.conf` is **never committed**. `.gitignore` blocks it. `host.conf.example` shows what fields exist with empty values.
-- Django SECRET_KEY, DB password, Redis URL, Stripe keys, Mailgun key, Telnyx user/token live in `/etc/bbl-ch-host.conf` (mode 600). Nowhere else on disk except inside the rendered Django settings file (also mode 600).
+- Non-secret defaults and per-host overrides live in `seeds/` and are in VCS.
+- Secrets are kept in `/etc/bbl-ch-secrets.conf` (mode 0600) on rpt and (optionally) per-host overrides in `/etc/bbl-ch-secrets.d/<short>.conf`. `seeds/secrets.example.conf` lists the fields.
+- At provision time, `scripts/provision.sh` assembles a single `/etc/bbl-ch-host.conf` (mode 0600) on the new box from the four layers. Nowhere else on disk except inside the rendered Django settings file (also mode 600).
 - TLS cert and key in `/etc/letsencrypt/live/<domain>/`.
 
 ## Status
