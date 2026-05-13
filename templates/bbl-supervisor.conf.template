@@ -1,7 +1,12 @@
 [program:bbl]
 directory=/projects/bbl-django
 user=bbl
-command=/projects/bbl_env_py3/bin/gunicorn --preload -b __BBL_GUNICORN_BIND__ --workers=__BBL_GUNICORN_WORKERS__ --timeout 80 bbl.wsgi --pythonpath '/projects/bbl-django' -c bbl/workers_config.py --logger-class bbl.custom_glogging.Logger
+; --max-requests + jitter recycle each worker after ~1000 requests so per-worker
+; memory leaks (Django session bloat, ORM caches, etc.) don't compound. Without
+; this, 1-CPU beta hosts spiral into OOM-kill territory within days of traffic
+; (chb-atl, 2026-05-13: 9 workers grew to 1.5G PSS, kernel OOM-killed
+; supervisord during a routine restart). Jitter prevents synchronized recycles.
+command=/projects/bbl_env_py3/bin/gunicorn --preload -b __BBL_GUNICORN_BIND__ --workers=__BBL_GUNICORN_WORKERS__ --max-requests=__BBL_GUNICORN_MAX_REQUESTS__ --max-requests-jitter=__BBL_GUNICORN_MAX_REQUESTS_JITTER__ --timeout 80 bbl.wsgi --pythonpath '/projects/bbl-django' -c bbl/workers_config.py --logger-class bbl.custom_glogging.Logger
 autostart=true
 autorestart=true
 stdout_logfile = /var/log/supervisor/bbl.stdout.log

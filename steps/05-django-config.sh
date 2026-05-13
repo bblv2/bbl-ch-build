@@ -14,7 +14,14 @@ source "${BBL_HOST_CONF:-/etc/bbl-ch-host.conf}"
 
 # Defaults that can be overridden in host.conf
 BBL_GUNICORN_BIND="${BBL_GUNICORN_BIND:-127.0.0.1:8001}"
-BBL_GUNICORN_WORKERS="${BBL_GUNICORN_WORKERS:-9}"
+# Worker count: rule of thumb is 2*CPU+1. Default 3 is safe for the smallest
+# 1-CPU beta nodes (a 9-worker default OOM-killed supervisord on chb-atl on
+# 2026-05-13). Beefier hosts override via host.conf or seeds.
+BBL_GUNICORN_WORKERS="${BBL_GUNICORN_WORKERS:-3}"
+# Recycle workers after ~1000 requests so per-worker memory growth doesn't
+# compound. Jitter spreads recycles so they don't all hit at once.
+BBL_GUNICORN_MAX_REQUESTS="${BBL_GUNICORN_MAX_REQUESTS:-1000}"
+BBL_GUNICORN_MAX_REQUESTS_JITTER="${BBL_GUNICORN_MAX_REQUESTS_JITTER:-100}"
 BBL_DOMAIN_ALIASES="${BBL_DOMAIN_ALIASES:-}"
 BBL_ROLE="${BBL_ROLE:-prod}"
 # celery beat default: only ONE host in the cluster runs beat (else
@@ -102,6 +109,8 @@ fi
 
 sed -e "s|__BBL_GUNICORN_BIND__|$BBL_GUNICORN_BIND|g" \
     -e "s|__BBL_GUNICORN_WORKERS__|$BBL_GUNICORN_WORKERS|g" \
+    -e "s|__BBL_GUNICORN_MAX_REQUESTS__|$BBL_GUNICORN_MAX_REQUESTS|g" \
+    -e "s|__BBL_GUNICORN_MAX_REQUESTS_JITTER__|$BBL_GUNICORN_MAX_REQUESTS_JITTER|g" \
     -e "s|__BBL_REDIS_TRACE_URL__|$BBL_REDIS_TRACE_URL|g" \
     "$TPL/bbl-supervisor.conf.template" > /etc/supervisor/conf.d/bbl.conf
 
