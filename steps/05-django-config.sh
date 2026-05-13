@@ -31,12 +31,22 @@ BBL_REDIS_TRACE_URL="${BBL_REDIS_TRACE_URL:-}"   # rpt redis URL for /call-trace
 
 # SESSION_COOKIE_DOMAIN: defaults from role so operators only override for unusual setups.
 # beta → bblapp.io (lbb-atl/beta.bblapp.io frontend domain)
-# prod → brandedbridgeline.com (lb-atl/app.brandedbridgeline.com customer domain)
+# prod → bblapp.io (ch-atl28 also serves app.brandedbridgeline.com via lb-atl;
+#                   the middleware.cookie_domain.CookieDomainByHost middleware
+#                   rewrites Domain= per request Host so BOTH families work
+#                   from one backend. This static value is only consulted as a
+#                   fallback when an unrecognized Host hits Django.)
+# See bbl-django/docs/django_ops_notes.md (Cookie-domain handling).
 if [[ -z "${BBL_SESSION_COOKIE_DOMAIN:-}" ]]; then
     if [[ "$BBL_ROLE" == "beta" ]]; then
         BBL_SESSION_COOKIE_DOMAIN=".bblapp.io"
     else
-        BBL_SESSION_COOKIE_DOMAIN=".brandedbridgeline.com"
+        # Prod ch-atl28 default. ch-atl28 fronts BOTH app.bblapp.io AND
+        # app.brandedbridgeline.com — the middleware handles the second
+        # family. We bias the default toward .bblapp.io because that's the
+        # internal-ops/prod-call-handler hostname; an unknown Host falling
+        # through to this default is more likely from a bblapp.io subdomain.
+        BBL_SESSION_COOKIE_DOMAIN=".bblapp.io"
     fi
 fi
 
@@ -140,6 +150,13 @@ settings.py dispatches via hostname: ch-atl* -> from atl_settings import *
 Python 3 absolute import finds THIS file (project root) not bbl/atl_settings.py.
 bbl/atl_settings.py has production-hard-coded values (bbl2022, .brandedbridgeline.com);
 this file layers the host-specific DB and the correct cookie domain for the role.
+
+Cookie domain: the value below is only a fallback. At request time the
+middleware middleware.cookie_domain.CookieDomainByHost rewrites Set-Cookie
+Domain= for sessionid + csrftoken based on the incoming Host header. That's
+what lets one backend (ch-atl28) serve both .bblapp.io and .brandedbridgeline.com
+without breaking auth on either. See bbl-django/docs/django_ops_notes.md
+(Cookie-domain handling).
 """
 from bbl.atl_settings import *
 
@@ -166,7 +183,13 @@ cat > "$HOST_SETTINGS" <<PYSETTINGS
 Loaded by bbl/settings.py at line ~477 (before the hostname dispatcher).
 DATABASES and SESSION_COOKIE_DOMAIN here are fallbacks for non-ch-atl* hostnames
 (e.g. ch-test-*) that don't hit the atl_settings dispatcher branch.
-For ch-atl* nodes, atl_settings.py (role overlay) wins those values instead."""
+For ch-atl* nodes, atl_settings.py (role overlay) wins those values instead.
+
+Cookie domain note: regardless of whether this file's SESSION_COOKIE_DOMAIN
+or atl_settings.py's wins at config-load, the per-request final answer is
+decided by middleware.cookie_domain.CookieDomainByHost, which rewrites
+Set-Cookie Domain= based on the request Host header. See
+bbl-django/docs/django_ops_notes.md (Cookie-domain handling)."""
 from bbl.atl_settings import *
 
 DATABASES = {
