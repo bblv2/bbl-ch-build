@@ -73,6 +73,13 @@ The provision script will print the new Linode's public IPv4 (you'll need this f
 04-frontend-clone.sh   git clone bblfrontend @ BBL_FRONTEND_REF (tagged commit
                        captured from prod ch-atl1's build dir); ready-to-serve,
                        no rebuild
+04b-frontend-build-smoke.sh
+                       Verify the SPA build pipeline actually works on this
+                       host (npm install --ignore-scripts + bower + webpack).
+                       Does NOT replace the pinned build/ — restores from git
+                       after the smoke build succeeds. Catches gyp / native-
+                       dep regressions at provision time instead of at deploy
+                       time when an operator first tries to rebuild.
 05-django-config.sh    Render /etc/supervisor/conf.d/{bbl,celery}.conf, nginx
                        site config, host-specific Django settings file
                        (bbl/<hostname>.py with DATABASES + secrets from
